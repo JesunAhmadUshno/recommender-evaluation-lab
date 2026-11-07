@@ -176,3 +176,17 @@ results of record. The fresh pass runs on BlackBoxV3 (Intel i5-8400,
 competing load; it is the machine of record for every timing this
 pass produces, and the timing tables and AUDIT.md must name it. No
 hypothesis, verdict rule, seed, split, or protocol element changes.
+
+## D14. Committed tables predate the D13 fresh pass and are provisional
+Every table now in results/ (the MovieLens-1M Arm T tables, the KuaiRec
+Arm T tuning grid, timings.csv, chosen_configs.json) was produced on the
+shared Muse VM before the D13 fresh pass; logs/stage_arm_t.log shows
+"(resumed)" tuning rows. Under D13 they are provisional, not results of
+record. They stay committed because CI's headline check and the dashboard
+read them, and because the D11 re-verification ties the ML-1M numbers to
+the committed code. Two known gaps follow from that environment and are
+left for the fresh pass rather than patched by hand: timings.csv does not
+name its machine, and it has no ML-1M iALS score_test row.
+results/headline_table.md is generated from these tables by
+scripts/reproduce_headline.py, so it carries the same status. No
+hypothesis, verdict rule, seed, split, or protocol element changes.

@@ -2,6 +2,8 @@
 
 Author: Jesun Ahmad Ushno.
 
+**Live dashboard:** [jesunahmadushno.github.io/recommender-evaluation-lab](https://jesunahmadushno.github.io/recommender-evaluation-lab/), with the study status, every frozen hypothesis, the recorded MovieLens-1M replication arm, and two simulators that run in your browser (sampled-rank correction, synthetic off-policy estimators). Source in `site/`; every number is read from `results/` and the study markdown at build time.
+
 Offline recommender evaluation, treated as the research object. On a
 fully observed public dataset (KuaiRec), this study measures how far the
 standard offline shortcuts move the answer: sampled metrics against 100
@@ -19,8 +21,19 @@ every statement in it.
 ## Status
 
 Pre-registered. PREREG.md is frozen in commit
-cab910eb9a66651771ba77656ad7950f6b005f00.
-No results exist yet at this commit.
+cab910eb9a66651771ba77656ad7950f6b005f00. The run is partial.
+
+- Recorded: MovieLens-1M Arm T (replication arm): exact metrics,
+  pairwise Holm table, sampled and corrected metrics over 10 seeds,
+  popularity report, cold-start slices, tuning grid
+  (`results/headline_table.md` is generated from these).
+- Tuning only: KuaiRec big Arm T. The grid comes from the resumed run that
+  D13 supersedes.
+- Not yet run: Arm F (fully observed truth), the semi-synthetic exposure
+  arm, the random-split arm, the planted-leak check, and the verdicts. None
+  of the frozen hypotheses H1 to H7 or S1 can be evaluated yet.
+- Every committed table predates the D13 fresh pass and is provisional
+  (DECISIONS.md D14).
 
 ## Layout
 
@@ -32,9 +45,15 @@ No results exist yet at this commit.
 - `src/` - split, rankers, metrics, correction, audit, stats.
 - `experiments/` - the audit and the full pipeline (`run_all.sh`).
 - `results/` - derived statistics only (DATA_LICENSE.md applies).
-- `RESULTS.md` - the published verdict, written from the derived data.
-- `AUDIT.md` - the self-audit and grade.
-- `paper/` - a short workshop-format write-up.
+- `site/` - the live dashboard (React + Vite); `npm run build` first runs
+  a known-answer check of its in-browser ports against the repo's tests
+  and committed results.
+- `docs/research-review.md` - a graded research-rigor review with the
+  remaining gaps and the compute each one needs.
+- `docs/related_work.md` - primary sources and the adjusted novelty claim.
+- Planned, not present yet: `RESULTS.md` (the published verdict),
+  `AUDIT.md` (the self-audit and grade) and `paper/` (a short
+  workshop-format write-up). They follow the fresh pass.
 
 ## Licences
 
