@@ -1,0 +1,10 @@
+# Raw datasets are fetched, never committed (licence terms: data/README.md).
+data/raw/
+*.zip
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+results/*.tmp
