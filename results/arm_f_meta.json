@@ -1,0 +1,5 @@
+{
+  "training_rule": "fallback (time-overlapping: strict rule kept under 20 percent of the pool)",
+  "pool_events": 10272525,
+  "pool_positive_cells": 652780
+}

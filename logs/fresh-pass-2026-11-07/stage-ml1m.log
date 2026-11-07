@@ -1,0 +1,47 @@
+[02:28:33] arm_t_ml1m: cutoffs t1=975768738.0 t2=978133376.4; train 800164 val 100024 test 100021; test users 1188
+[02:28:35] arm_t_ml1m tune ItemKNN {'k': 50, 'shrink': 0.0} -> val NDCG 0.0510
+[02:28:35] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (1 rows)
+[02:28:37] arm_t_ml1m tune ItemKNN {'k': 50, 'shrink': 50.0} -> val NDCG 0.0528
+[02:28:37] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (2 rows)
+[02:28:39] arm_t_ml1m tune ItemKNN {'k': 100, 'shrink': 0.0} -> val NDCG 0.0537
+[02:28:39] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (3 rows)
+[02:28:41] arm_t_ml1m tune ItemKNN {'k': 100, 'shrink': 50.0} -> val NDCG 0.0529
+[02:28:41] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (4 rows)
+[02:28:44] arm_t_ml1m tune EASE {'lam': 10.0} -> val NDCG 0.0394
+[02:28:44] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (5 rows)
+[02:28:47] arm_t_ml1m tune EASE {'lam': 50.0} -> val NDCG 0.0427
+[02:28:47] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (6 rows)
+[02:28:50] arm_t_ml1m tune EASE {'lam': 100.0} -> val NDCG 0.0452
+[02:28:50] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (7 rows)
+[02:28:53] arm_t_ml1m tune EASE {'lam': 250.0} -> val NDCG 0.0454
+[02:28:53] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (8 rows)
+[02:28:56] arm_t_ml1m tune EASE {'lam': 500.0} -> val NDCG 0.0474
+[02:28:56] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (9 rows)
+[02:29:00] arm_t_ml1m tune iALS {'factors': 32, 'reg': 0.1, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0406
+[02:29:00] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (10 rows)
+[02:29:03] arm_t_ml1m tune iALS {'factors': 32, 'reg': 1.0, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0399
+[02:29:03] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (11 rows)
+[02:29:10] arm_t_ml1m tune iALS {'factors': 64, 'reg': 0.1, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0388
+[02:29:10] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (12 rows)
+[02:29:16] arm_t_ml1m tune iALS {'factors': 64, 'reg': 1.0, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0384
+[02:29:16] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (13 rows)
+[02:29:34] arm_t_ml1m tune iALS {'factors': 128, 'reg': 0.1, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0384
+[02:29:34] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (14 rows)
+[02:29:52] arm_t_ml1m tune iALS {'factors': 128, 'reg': 1.0, 'alpha': 10.0, 'iterations': 10} -> val NDCG 0.0389
+[02:29:52] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (15 rows)
+[02:29:59] arm_t_ml1m tune iALS {'factors': 64, 'reg': 0.1, 'alpha': 1.0, 'iterations': 10} -> val NDCG 0.0410
+[02:29:59] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (16 rows)
+[02:30:05] arm_t_ml1m tune iALS {'factors': 64, 'reg': 0.1, 'alpha': 40.0, 'iterations': 10} -> val NDCG 0.0316
+[02:30:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (17 rows)
+[02:30:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/tuning_arm_t_ml1m.csv (17 rows)
+[02:30:06] arm_t_ml1m sampled done: Random
+[02:30:07] arm_t_ml1m sampled done: Popularity
+[02:30:12] arm_t_ml1m sampled done: ItemKNN
+[02:30:16] arm_t_ml1m sampled done: EASE
+[02:31:04] arm_t_ml1m sampled done: iALS
+[02:31:04] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/arm_metrics.csv (10 rows)
+[02:31:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/pairwise.csv (12 rows)
+[02:31:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/timings.csv (14 rows)
+[02:31:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/sampled_metrics.csv (100 rows)
+[02:31:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/popularity_report.csv (12 rows)
+[02:31:05] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/cold_start.csv (20 rows)

@@ -1,0 +1,20 @@
+B3 fresh single pass (DECISIONS.md D13)
+machine: BlackBoxV3, Intel i5-8400, 6 cores, 7.1 GiB RAM, Ubuntu 26.04
+OMP_NUM_THREADS=6
+python: 3.12.16
+pass start: 2026-11-07T02:04:06-05:00
+stage audit start: 2026-11-07T02:04:06-05:00
+stage audit end: 2026-11-07T02:05:54-05:00 exit=0
+stage arm_t start: 2026-11-07T02:09:45-05:00
+stage arm_t end: 2026-11-07T02:21:45-05:00 exit=0
+stage ml1m start: 2026-11-07T02:28:31-05:00
+stage ml1m end: 2026-11-07T02:31:05-05:00 exit=0
+stage arm_f start: 2026-11-07T02:34:04-05:00
+stage arm_f end: 2026-11-07T02:36:08-05:00 exit=0
+stage random start: 2026-11-07T02:39:02-05:00
+stage random end: 2026-11-07T02:55:15-05:00 exit=0
+stage verdicts start: 2026-11-07T02:56:12-05:00
+stage verdicts end: 2026-11-07T02:56:16-05:00 exit=1
+stage verdicts start: 2026-11-07T02:58:34-05:00
+stage verdicts end: 2026-11-07T02:58:34-05:00 exit=0
+pass end: 2026-11-07T02:59:13-05:00

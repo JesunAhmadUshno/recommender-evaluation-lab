@@ -1,0 +1,21 @@
+[02:41:18] random arm kuairec_big seed 0 done
+[02:41:18] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (5 rows)
+[02:43:33] random arm kuairec_big seed 1 done
+[02:43:33] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (10 rows)
+[02:45:48] random arm kuairec_big seed 2 done
+[02:45:48] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (15 rows)
+[02:48:03] random arm kuairec_big seed 3 done
+[02:48:03] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (20 rows)
+[02:50:17] random arm kuairec_big seed 4 done
+[02:50:17] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (25 rows)
+[02:51:16] random arm ml1m seed 0 done
+[02:51:16] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (30 rows)
+[02:52:16] random arm ml1m seed 1 done
+[02:52:16] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (35 rows)
+[02:53:15] random arm ml1m seed 2 done
+[02:53:15] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (40 rows)
+[02:54:15] random arm ml1m seed 3 done
+[02:54:15] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (45 rows)
+[02:55:15] random arm ml1m seed 4 done
+[02:55:15] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (50 rows)
+[02:55:15] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/random_split.csv (50 rows)

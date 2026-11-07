@@ -1,0 +1,32 @@
+[02:34:13] arm_f: rule = fallback (time-overlapping: strict rule kept under 20 percent of the pool); pool events 10272525; pool positives 652780
+[02:34:14] arm_f Random: truth NDCG@10 = 0.0468
+[02:34:14] arm_f Popularity: truth NDCG@10 = 0.0199
+[02:34:15] arm_f ItemKNN: truth NDCG@10 = 0.0634
+[02:34:18] arm_f EASE: truth NDCG@10 = 0.0634
+[02:34:47] arm_f iALS: truth NDCG@10 = 0.0634
+[02:34:47] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/arm_metrics.csv (15 rows)
+[02:34:47] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/pairwise.csv (18 rows)
+[02:34:47] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/timings.csv (18 rows)
+[02:34:48] arm_f sampled done: Random
+[02:34:49] arm_f sampled done: Popularity
+[02:34:50] arm_f sampled done: ItemKNN
+[02:34:51] arm_f sampled done: EASE
+[02:34:52] arm_f sampled done: iALS
+[02:34:52] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/sampled_metrics.csv (150 rows)
+[02:34:52] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/popularity_report.csv (18 rows)
+[02:34:52] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/arm_f_label_sensitivity.csv (5 rows)
+[02:34:52] arm_f sensitivity pool Random: NDCG 0.0472
+[02:34:52] arm_f sensitivity pool Popularity: NDCG 0.0925
+[02:34:53] arm_f sensitivity pool ItemKNN: NDCG 0.0634
+[02:34:56] arm_f sensitivity pool EASE: NDCG 0.0634
+[02:34:59] arm_f sensitivity pool iALS: NDCG 0.0634
+[02:34:59] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/arm_f_pool_sensitivity.csv (5 rows)
+[02:35:01] slice head_top1pct done
+[02:35:05] slice torso_next9pct done
+[02:35:09] slice tail_rest done
+[02:35:09] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/popularity_slices.csv (15 rows)
+[02:36:08] exposure arm gamma=0.0 done (c=0.1630)
+[02:36:08] exposure arm gamma=0.5 done (c=0.5011)
+[02:36:08] exposure arm gamma=1.0 done (c=1.4578)
+[02:36:08] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/exposure_estimates.csv (300 rows)
+[02:36:08] wrote /home/jesunushno/b3-fresh/recommender-evaluation-lab-main/results/tables/exposure_tau.csv (60 rows)

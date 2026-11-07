@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/home/jesunushno/b3-fresh/recommender-evaluation-lab-main/experiments/run_all.py", line 1288, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/jesunushno/b3-fresh/recommender-evaluation-lab-main/experiments/run_all.py", line 1281, in main
+    v = stage_verdicts()
+        ^^^^^^^^^^^^^^^^
+  File "/home/jesunushno/b3-fresh/recommender-evaluation-lab-main/experiments/run_all.py", line 1187, in stage_verdicts
+    prereg_hash = subprocess.run(
+                  ^^^^^^^^^^^^^^^
+  File "/home/jesunushno/.local/share/uv/python/cpython-3.12.16-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jesunushno/.local/share/uv/python/cpython-3.12.16-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/home/jesunushno/.local/share/uv/python/cpython-3.12.16-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'git'
