@@ -18,7 +18,8 @@ every statement in it.
 
 ## Status
 
-Pre-registered. PREREG.md is frozen in commit __PREREG_HASH__.
+Pre-registered. PREREG.md is frozen in commit
+cab910eb9a66651771ba77656ad7950f6b005f00.
 No results exist yet at this commit.
 
 ## Layout
