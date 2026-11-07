@@ -3,8 +3,12 @@ import prereg from '../../PREREG.md?raw';
 import decisionsMd from '../../DECISIONS.md?raw';
 import audit from '../../results/data_audit.json';
 import chosen from '../../results/chosen_configs.json';
+import verdicts from '../../results/verdicts.json';
+import armFMeta from '../../results/arm_f_meta.json';
+import resultsMd from '../../RESULTS.md?raw';
+import auditMd from '../../AUDIT.md?raw';
 import metricTests from '../../tests/test_metrics.py?raw';
-import { parseCsv, sampledSummary, parseHypotheses, parseDecisions, preregFacts, section } from './data.js';
+import { parseCsv, sampledSummary, parseHypotheses, parseDecisions, preregFacts, section, parseVerdictTable } from './data.js';
 import { simulateSampledRank, holmAdjust, syntheticWorld, simulateOffPolicy, correctedRank } from './stats.js';
 
 // Every committed result file, read at build time. The study-status strip and the hypothesis
@@ -57,22 +61,32 @@ const NEEDS = {
   S1: [['exposure_estimates.csv', null, 'semi-synthetic exposure arm']],
 };
 const present = ([file, arm]) => (arm ? armsIn(file).has(arm) : hasFile(file));
+// RESULTS.md sorts the computed verdicts into those that stand on valid evidence and those
+// whose evidence includes the void Arm F learned-ranker rows (its validity notice).
+const VALID = Object.fromEntries(parseVerdictTable(resultsMd, 'Verdicts that stand on valid evidence').map((v) => [v.id, v]));
+const VOID = Object.fromEntries(parseVerdictTable(resultsMd, 'Verdicts as computed, not usable as findings').map((v) => [v.id, v]));
 const HYPS = parseHypotheses(prereg).map((h) => {
   const missing = (NEEDS[h.id] || []).filter((n) => !present(n)).map((n) => n[2]);
-  const status = missing.length ? 'pending' : hasFile('verdicts.json') ? 'verdict in verdicts.json' : 'evidence in, verdict not run';
-  return { ...h, missing: [...new Set(missing)], status };
+  const verdict = verdicts[h.id]?.verdict;
+  const status = !verdict ? (missing.length ? 'pending' : 'evidence in, verdict not run') : VOID[h.id] ? 'void' : VALID[h.id] ? 'valid' : 'unclassified';
+  return { ...h, missing: verdict ? [] : [...new Set(missing)], status, verdict, note: (VALID[h.id] || VOID[h.id])?.note };
 });
-const EVALUATED = HYPS.filter((h) => h.status !== 'pending').length;
+const USABLE = HYPS.filter((h) => h.status === 'valid').length;
+const N_VOID = HYPS.filter((h) => h.status === 'void').length;
+const MACHINE = resultsMd.match(/run on (\w+) \(/)?.[1];
+const GRADE = auditMd.match(/Grade: ([\d,]+ of [\d,]+)/)?.[1];
+const ARM_F_USERS = METRICS.find((r) => r.arm === 'arm_f')?.n_users;
 
 const STATUS = [
   ['ML-1M Arm T', armsIn('arm_metrics.csv').has('arm_t_ml1m') ? 'recorded' : 'not yet run'],
   ['KuaiRec Arm T', armsIn('arm_metrics.csv').has('arm_t_kuairec') ? 'recorded' : armsIn('tuning_arm_t_kuairec.csv').has('arm_t_kuairec') ? 'tuning only' : 'not yet run'],
-  ['Arm F (truth)', armsIn('arm_metrics.csv').has('arm_f') ? 'recorded' : 'not yet run'],
+  ['Arm F (truth)', !armsIn('arm_metrics.csv').has('arm_f') ? 'not yet run' : N_VOID ? 'learned-ranker rows void' : 'recorded'],
   ['Exposure arm', hasFile('exposure_estimates.csv') ? 'recorded' : 'not yet run'],
   ['Random split', hasFile('random_split.csv') ? 'recorded' : 'not yet run'],
+  ['Leakage audit', hasFile('leakage_check.json') ? 'recorded' : 'not yet run'],
   ['Verdicts', hasFile('verdicts.json') ? 'recorded' : 'not yet run'],
 ];
-const statusPill = (s) => (s === 'recorded' ? 'good' : s === 'tuning only' ? 'warn' : 'bad');
+const statusPill = (s) => (s === 'recorded' ? 'good' : s === 'not yet run' ? 'bad' : 'warn');
 
 const SECTIONS = [['top', 'Overview', '◎'], ['hyp', 'Hypotheses', 'H'], ['reversal', 'Reversal', '⇅'], ['sim', 'Simulator', '◷'], ['board', 'Leaderboard', '▥'], ['holm', 'Holm table', 'p'], ['pop', 'Popularity', '%'], ['cold', 'Cold start', '❄'], ['tuning', 'Tuning', '⚙'], ['ips', 'Off-policy', '⇄'], ['audit', 'Data', '⛁'], ['limits', 'Limits', '!'], ['decisions', 'Decisions', '✓']];
 
@@ -97,7 +111,7 @@ function MenuBar() {
       <a className="m" href={blob('DECISIONS.md')}>Decisions</a>
       <a className="m" href={blob('docs/research-review.md')}>Research review</a>
       <span className="spacer" />
-      <span className="status"><i /> Run partial, results provisional</span>
+      <span className="status"><i /> D13 run of record · Arm F learned rows void</span>
       <a href={REPO}>GitHub ↗</a>
       <span className="clock">{now.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span>
     </div>
@@ -183,14 +197,14 @@ function Hero() {
   return (
     <header className="card hero window" id="top" data-title="recommender-evaluation-lab — README.md">
       <div className="head">
-        <p className="eyebrow">Pre-registered study · run in progress</p>
-        <span className="pill warn">● Provisional: predates the D13 fresh pass</span>
+        <p className="eyebrow">Pre-registered study · D13 single pass on {MACHINE} · self-audit {GRADE}</p>
+        <span className="pill warn">● {N_VOID} of {HYPS.length} verdicts void: Arm F pool defect</span>
       </div>
       <h1>On MovieLens-1M, scoring against {FACTS.m} sampled negatives <em>reverses</em> the model order.</h1>
       <p className="sub">
         {bestExact.name} is best of the {nonRandom.length} non-random rankers on the full ranking (exact NDCG@10 {f4(bestExact.exact)}) but ranks {rankIn('sampled', bestExact.name)} of {nonRandom.length} on sampled NDCG@10.{' '}
         {sameOrder ? `The rank-mapping correction keeps the sampled order (${bestSampled.name} first) instead of restoring the exact one.` : `The rank-mapping correction changes the sampled order but does not restore the exact one.`}{' '}
-        This is the replication arm, read descriptively: the frozen hypotheses sit on KuaiRec arms that have not run yet, so every verdict below is pending.
+        This is the replication arm, read descriptively. Of the {HYPS.length} frozen verdicts, {USABLE} stand on valid evidence; the other {N_VOID} are published as computed but are not usable, because the frozen Arm F training pool gives every target user an empty history (<a href={blob('RESULTS.md')}>RESULTS.md</a> validity notice).
       </p>
       <div className="status-strip" aria-label="Study status by arm">
         {STATUS.map(([k, s]) => <span key={k} className={`pill ${statusPill(s)}`}>{k}: {s}</span>)}
@@ -198,13 +212,13 @@ function Hero() {
       <div className="actions">
         <a className="btn primary" href="#sim">Try the sampled-rank simulator</a>
         <a className="btn ghost" href={blob('PREREG.md')}>Read the pre-registration</a>
-        <a className="btn ghost" href={blob('DECISIONS.md')}>D13: why results are provisional</a>
+        <a className="btn ghost" href={blob('RESULTS.md')}>RESULTS.md: the Arm F validity notice</a>
       </div>
       <div className="tiles">
         <div className="tile"><div className="num">{f3(bestExact.exact)}</div><div className="cap">{bestExact.name}, best exact NDCG@10 ({fmt(N_USERS)} test users)</div></div>
         <div className="tile"><div className="num">{allSeeds}/{nrPairs.length}</div><div className="cap">non-random ranker pairs flipped by sampled NDCG in all {SUMMARY.seeds.length} seeds</div></div>
         <div className="tile"><div className="num">{f3(bestSampled.corrected)}</div><div className="cap">{bestSampled.name} corrected NDCG@10 vs {f3(bestSampled.exact)} exact</div></div>
-        <div className="tile"><div className="num">{EVALUATED}/{HYPS.length}</div><div className="cap">frozen verdict rules that can be evaluated with committed data</div></div>
+        <div className="tile"><div className="num">{USABLE}/{HYPS.length}</div><div className="cap">frozen verdicts that stand on valid evidence (RESULTS.md)</div></div>
       </div>
     </header>
   );
@@ -214,16 +228,17 @@ function Hypotheses() {
   return (
     <section id="hyp" className="card window reveal" data-title="prereg.md — Hypotheses">
       <p className="eyebrow">Frozen verdict rules · PREREG section 6</p>
-      <h2>{HYPS.length} rules frozen before any metric was computed. <em>{EVALUATED}</em> can be decided today.</h2>
-      <p className="sub">Each card quotes its rule from <a href={blob('PREREG.md')}>PREREG.md</a>. Its status is worked out from which result tables are committed; no verdict is filled in by hand.</p>
+      <h2>{HYPS.length} rules frozen before any metric was computed. <em>{USABLE}</em> stand on valid evidence.</h2>
+      <p className="sub">Each card quotes its rule from <a href={blob('PREREG.md')}>PREREG.md</a>, the verdict the pipeline computed from <a href={blob('results/verdicts.json')}>verdicts.json</a>, and the evidence line from <a href={blob('RESULTS.md')}>RESULTS.md</a>. Cards marked void are shown as computed, but their evidence includes the Arm F learned-ranker rows that RESULTS.md declares void; do not cite them. No verdict is filled in by hand.</p>
       <div className="hyp-grid">
         {HYPS.map((h) => (
           <div className="tile hyp" key={h.id}>
             <div className="head" style={{ marginBottom: 6 }}>
               <h3><span className="mono">{h.id}</span> {h.title}</h3>
-              <span className={`pill ${h.status === 'pending' ? 'warn' : 'info'}`}>{h.status === 'pending' ? 'Pending' : h.status}</span>
+              <span className={`pill ${h.status === 'valid' ? (h.verdict === 'SUPPORTED' ? 'good' : 'bad') : 'warn'}`}>{h.status === 'valid' ? h.verdict : h.status === 'void' ? 'Void' : h.status}</span>
             </div>
             <p className="rule">{h.rule}</p>
+            {h.note && <p className="hint" style={{ margin: '0 0 4px' }}><b>{h.status === 'void' ? `Computed ${h.verdict}; why it cannot be cited:` : 'Evidence:'}</b> {h.note}</p>}
             {h.missing.length > 0 && <p className="hint" style={{ margin: 0 }}>Needs: {h.missing.join('; ')}.</p>}
           </div>
         ))}
@@ -249,7 +264,7 @@ function Reversal() {
           <h2>Full ranking and sampled ranking <em>disagree</em> on almost every pair.</h2>
           <p className="sub">
             Left: each column ranks the {r.length} rankers by its own metric; labels give the value. Sampled and corrected NDCG@10 are means over {SUMMARY.seeds.length} negative-sampling seeds of {FACTS.m} negatives per user.
-            This is descriptive replication on MovieLens-1M. The frozen H2a and H2b are decided on Arm F, which has not run.
+            This is descriptive replication on MovieLens-1M. The frozen H2a and H2b are decided on Arm F, where the learned rankers' rows are void, so those two verdicts are not usable (RESULTS.md).
           </p>
         </div>
         <Recorded src="tables/sampled_metrics.csv" />
@@ -487,7 +502,7 @@ function Popularity() {
           </div>
         ))}
       </div>
-      <p className="hint" style={{ marginTop: 12 }}>Scale 0 to 100%. H6 (head-heaviness) is frozen on Arm F, so this is context, not its verdict.</p>
+      <p className="hint" style={{ marginTop: 12 }}>Scale 0 to 100%. H6 (head-heaviness) is frozen on Arm F, whose pooled share includes the void learned-ranker lists, so this is context, not its verdict.</p>
     </section>
   );
 }
@@ -550,12 +565,10 @@ function Tuning() {
           <h2>The frozen grids, every trial shown, the <em>chosen</em> config marked.</h2>
           <p className="sub">
             Selection metric: validation NDCG@10. {cfgMap ? 'The chosen config comes from chosen_configs.json.' : 'chosen_configs.json holds no entry for this arm yet, so the best trial is marked as the grid argmax, not as a chosen config.'}
-            {ds === 'kuairec' && ' This grid is from the resumed run that D13 supersedes; the fresh pass will replace it.'}
           </p>
         </div>
         <Seg label="Dataset" value={ds} onChange={setDs} options={[['ml1m', 'MovieLens-1M'], ['kuairec', 'KuaiRec big']]} />
       </div>
-      {ds === 'kuairec' && <p><span className="pill warn">From the resumed run that D13 supersedes</span></p>}
       <div className="tuning-grid">
         {groups.map((g) => {
           const gr = rows.filter((r) => r.ranker === g);
@@ -605,7 +618,7 @@ function OffPolicy() {
           <p className="sub">
             A small synthetic world ({world.users} users × {world.items} items, fully known relevance) with {res.names.length} rankers of different popularity tilt.
             Exposure is drawn as Bernoulli(p_i) with p_i = max({FACTS.floor}, c·(n_i/n_max)^γ), mean {FACTS.density} before the floor, ported from <a href={blob('src/correction.py')}>make_propensities</a>.
-            Naive, IPS and SNIPS see only the exposed cells; the truth sees all of them. The exposure arm that tests H4a, H4b and S1 on KuaiRec has not run.
+            Naive, IPS and SNIPS see only the exposed cells; the truth sees all of them. The KuaiRec exposure arm that tests H4a, H4b and S1 has run, but those verdicts rest partly on the void Arm F lists (RESULTS.md).
           </p>
         </div>
         <span className="pill warn">Synthetic</span>
@@ -649,7 +662,6 @@ function Audit() {
   const poolPct = af.big_events_on_small_items_frac_before_small_min * 100;
   const W = 720, rowH = 64, H = sets.length * rowH + 10, l = 120, rr = 20;
   const markOf = (k) => (k === 'kuairec_small' ? [[af.small_ts_min, 'T_s'], [af.small_ts_median, 'median']] : [[audit[k].ts_q80, 'T1'], [audit[k].ts_q90, 'T2']]);
-  const missingScore = [...new Set(TIMINGS.map((t) => t.ranker))].filter((rk) => !TIMINGS.some((t) => t.ranker === rk && t.stage === 'score_test'));
   return (
     <section id="audit" className="card window reveal" data-title="data_audit.json — Data & splits">
       <div className="head">
@@ -692,17 +704,18 @@ function Audit() {
             The strict rule needs at least {FACTS.strictRulePct}% of the training pool (big-matrix events on small-matrix items) before T_s. Measured: {poolPct.toFixed(4)}% ({fmt(af.big_events_on_small_items)} pool events),
             so the frozen fallback applies: train on the whole pool, label the arm time-overlapping, and add a sensitivity arm trained before the small-matrix median ({pct(af.big_events_on_small_items_frac_before_small_median, 1)} of the pool).
             Small-matrix pairs found in the big matrix: {af.small_pairs_present_in_big} of {fmt(af.small_pairs_total)}.
+            The fresh pass trained on {fmt(armFMeta.pool_events)} pool events ({fmt(armFMeta.pool_positive_cells)} positive cells); RESULTS.md shows none of them belong to the {fmt(ARM_F_USERS)} target users, so the learned rankers score from empty histories.
           </p>
         </div>
-        <div className="tile">
+        <div className="tile" style={{ minWidth: 0 }}>
           <h3>timings.csv</h3>
           <div style={{ overflowX: 'auto' }}>
             <table>
-              <thead><tr><th>Ranker</th><th>Stage</th><th>Seconds</th><th>Peak MB</th></tr></thead>
-              <tbody>{TIMINGS.map((t, i) => <tr key={i}><td>{t.ranker}</td><td className="mono">{t.stage}</td><td>{t.seconds < 0.01 ? t.seconds.toExponential(1) : t.seconds.toFixed(2)}</td><td>{fmt(t.peak_mb)}</td></tr>)}</tbody>
+              <thead><tr><th>Arm</th><th>Ranker</th><th>Stage</th><th>Seconds</th><th>Peak MB</th></tr></thead>
+              <tbody>{TIMINGS.map((t, i) => <tr key={i}><td className="mono">{t.arm}</td><td>{t.ranker}</td><td className="mono">{t.stage}</td><td>{t.seconds < 0.01 ? t.seconds.toExponential(1) : t.seconds.toFixed(2)}</td><td>{fmt(t.peak_mb)}</td></tr>)}</tbody>
             </table>
           </div>
-          <p className="hint" style={{ margin: '6px 0 0' }}>No machine is named in this table, which D13 requires. No score_test row for: {missingScore.join(', ') || 'none'}.</p>
+          <p className="hint" style={{ margin: '6px 0 0' }}>Machine of record: {MACHINE}, named in RESULTS.md with its CPU, RAM and library versions. iALS rows time five seed fits together.</p>
         </div>
       </div>
     </section>
@@ -713,8 +726,9 @@ function Limits() {
   const guard = section(prereg, 'Overclaim guard').replace(/\s+/g, ' ');
   const itemCold = COLD.filter((r) => r.arm === ARM && r.slice === 'item_cold');
   const items = [
-    ['Provisional tables', 'Every recorded table on this page was produced on the shared VM before the D13 fresh pass (logs/stage_arm_t.log shows resumed rows). D13 supersedes them as results of record; the ML-1M numbers were re-verified in D11 but still come from that environment.'],
-    ['Replication, not verdict', `The reversal is MovieLens-1M (${fmt(N_USERS)} users, ${SUMMARY.seeds.length} sampling seeds). H2a and H2b are frozen on Arm F (KuaiRec small), which has no committed output. Nothing here confirms or refutes a hypothesis.`],
+    ['Arm F learned rankers are void', `KuaiRec's small and big matrices share ${audit.arm_f.small_pairs_present_in_big} of ${fmt(audit.arm_f.small_pairs_total)} pairs, so the frozen D5 pool (big-matrix events on small-matrix items) leaves all ${fmt(ARM_F_USERS)} target users with an empty history. ItemKNN, EASE and iALS then return all-zero scores; their Arm F rows are tie-break artifacts and ${N_VOID} verdicts that use them are not usable. Fixing it needs a new protocol decision, not a patch (RESULTS.md).`],
+    ['Replication, not verdict', `The reversal is MovieLens-1M (${fmt(N_USERS)} users, ${SUMMARY.seeds.length} sampling seeds). H2a and H2b are frozen on Arm F, so the reversal shown here neither confirms nor refutes them.`],
+    ['One pass, one machine', `Every table comes from the single D13 pass on ${MACHINE}. Nothing has been rerun independently, and the self-audit grade (${GRADE}, AUDIT.md) is the author's own.`],
     ['Missing uncertainty', 'No bootstrap interval is recorded for the sampled-versus-exact gaps or for the flip rates; arm_metrics.csv carries an interval for NDCG@10 only.'],
     ['Degenerate slice', `The ML-1M item-cold slice holds ${itemCold[0]?.n_users} users and every ranker scores ${itemCold.every((r) => r.ndcg === 0) ? 'exactly 0' : 'near 0'}. It cannot rank models.`],
     ['Synthetic simulators', 'The off-policy playground uses a synthetic matrix and the rank simulator a single synthetic user. Neither is KuaiRec data or an Arm F result.'],

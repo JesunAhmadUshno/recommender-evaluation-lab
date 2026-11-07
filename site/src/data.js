@@ -108,3 +108,9 @@ export function preregFacts(prereg) {
     gammas: (prereg.match(/gamma in\s+\{([^}]*)\}/)?.[1].match(/\d+(\.\d+)?/g) || []).map(Number),
   };
 }
+
+// RESULTS.md verdict tables: "| H1 Title | VERDICT | evidence |" -> { id, verdict, note }.
+export function parseVerdictTable(md, title) {
+  return section(md, title).split('\n').map((l) => l.match(/^\| (H\d[ab]?|S\d) [^|]*\| ([A-Z ]+?) \| (.*) \|$/))
+    .filter(Boolean).map(([, id, verdict, note]) => ({ id, verdict, note }));
+}

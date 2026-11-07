@@ -6,7 +6,7 @@ import {
   expectedSampledRank, correctedRank, simulateSampledRank, holmAdjust, kendallTauB,
   makePropensities, estimatePropensities, syntheticWorld, simulateOffPolicy,
 } from './stats.js';
-import { parseCsv, sampledSummary, parseHeadline, parseHypotheses, parseDecisions, preregFacts } from './data.js';
+import { parseCsv, sampledSummary, parseHeadline, parseHypotheses, parseDecisions, preregFacts, parseVerdictTable } from './data.js';
 
 const repo = new URL('../../', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p, repo), 'utf8');
@@ -64,5 +64,17 @@ assert.ok(parseHypotheses(prereg).every((h) => h.rule.length > 20), 'every hypot
 assert.deepEqual(preregFacts(prereg), { m: 100, strictRulePct: 20, nBoot: 2000, floor: 0.01, density: 0.163, gammas: [0, 0.5, 1] });
 const ds = parseDecisions(read('DECISIONS.md'));
 assert.deepEqual(ds.slice(0, 13).map((d) => d.id), Array.from({ length: 13 }, (_, i) => `D${i + 1}`));
+
+// 8. RESULTS.md verdict tables split the 13 hypotheses into valid and void, and every verdict
+//    they quote equals the one the pipeline wrote to results/verdicts.json.
+const resultsMd = read('RESULTS.md');
+const verdicts = JSON.parse(read('results/verdicts.json'));
+const valid = parseVerdictTable(resultsMd, 'Verdicts that stand on valid evidence');
+const voided = parseVerdictTable(resultsMd, 'Verdicts as computed, not usable as findings');
+assert.deepEqual(valid.map((v) => v.id), ['H1', 'H1a', 'H1b', 'H3a', 'H3b', 'H7']);
+assert.deepEqual(voided.map((v) => v.id), ['H2a', 'H2b', 'H4a', 'H4b', 'S1', 'H5', 'H6']);
+for (const v of [...valid, ...voided]) assert.equal(v.verdict, verdicts[v.id].verdict, `verdict ${v.id}`);
+assert.equal(new Set([...valid, ...voided].map((v) => v.id)).size, 13, 'every hypothesis classified once');
+assert.match(resultsMd, /run on BlackBoxV3 \(/, 'machine of record named');
 
 console.log('stats.check: all known-answer checks pass');
