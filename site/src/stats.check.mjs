@@ -77,4 +77,13 @@ for (const v of [...valid, ...voided]) assert.equal(v.verdict, verdicts[v.id].ve
 assert.equal(new Set([...valid, ...voided].map((v) => v.id)).size, 13, 'every hypothesis classified once');
 assert.match(resultsMd, /run on BlackBoxV3 \(/, 'machine of record named');
 
+// 9. The defect's signature in the committed tables: on Arm F the three learned rankers
+//    (empty histories, all-zero scores) have identical rows in every Arm F table.
+const learned = ['ItemKNN', 'EASE', 'iALS'];
+for (const [file, col] of [['arm_metrics.csv', 'ndcg'], ['arm_f_pool_sensitivity.csv', 'ndcg'], ['arm_f_label_sensitivity.csv', 'ndcg']]) {
+  const rows = parseCsv(read(`results/tables/${file}`)).filter((r) => (r.arm ?? 'arm_f') === 'arm_f' && learned.includes(r.ranker));
+  assert.equal(rows.length, 3, `${file} has the three learned rankers`);
+  assert.equal(new Set(rows.map((r) => r[col])).size, 1, `${file}: learned rankers identical on Arm F`);
+}
+
 console.log('stats.check: all known-answer checks pass');
