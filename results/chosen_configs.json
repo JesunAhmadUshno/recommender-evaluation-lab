@@ -1,0 +1,19 @@
+{
+  "arm_t_ml1m": {
+    "Random": {},
+    "Popularity": {},
+    "ItemKNN": {
+      "k": 100,
+      "shrink": 0.0
+    },
+    "EASE": {
+      "lam": 500.0
+    },
+    "iALS": {
+      "factors": 64,
+      "reg": 0.1,
+      "alpha": 1.0,
+      "iterations": 10
+    }
+  }
+}

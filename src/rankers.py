@@ -16,6 +16,105 @@ from __future__ import annotations
 import numpy as np
 
 
+_OPENBLAS = None
+_OPENBLAS_TRIED = False
+
+
+def _load_openblas():
+    """Load the OpenBLAS library bundled with numpy, once. Returns None
+    when it cannot be found (callers fall back to numpy entry points)."""
+    global _OPENBLAS, _OPENBLAS_TRIED
+    if _OPENBLAS_TRIED:
+        return _OPENBLAS
+    _OPENBLAS_TRIED = True
+    try:
+        import ctypes
+        import glob
+        from pathlib import Path
+        libs_dir = Path(np.__file__).parent.parent / "numpy.libs"
+        candidates = sorted(glob.glob(str(libs_dir / "libscipy_openblas64_*.so"))) \
+            + sorted(glob.glob(str(libs_dir / "libopenblas*.so*")))
+        for path in candidates:
+            try:
+                _OPENBLAS = ctypes.CDLL(path)
+                break
+            except OSError:
+                continue
+    except Exception:
+        _OPENBLAS = None
+    return _OPENBLAS
+
+
+def _inv_inplace_lapack(A: np.ndarray) -> bool:
+    """Overwrite the square matrix A with its inverse, in place, via the
+    LAPACK getrf/getri routines bundled with numpy (ILP64 scipy
+    OpenBLAS: scipy_*getrf_64_ / scipy_*getri_64_).
+
+    np.linalg.inv copies its input before factoring, which costs a
+    second full matrix of peak memory (460 MB at this study's catalogue
+    size) and was the point where the shared VM kept killing the
+    pipeline. getrf/getri are the same routines np.linalg.inv calls,
+    and the Gram matrices inverted here are symmetric, so the
+    column-major view of the buffer is the matrix itself and the
+    in-place result is the same inverse. Returns False when the entry
+    points are unavailable (caller falls back to np.linalg.inv); a
+    singular matrix raises LinAlgError, matching np.linalg.inv."""
+    lib = _load_openblas()
+    if lib is None or A.ndim != 2 or A.shape[0] != A.shape[1] \
+            or not A.flags["C_CONTIGUOUS"]:
+        return False
+    if A.dtype == np.float32:
+        names = ("scipy_sgetrf_64_", "scipy_sgetri_64_")
+    elif A.dtype == np.float64:
+        names = ("scipy_dgetrf_64_", "scipy_dgetri_64_")
+    else:
+        return False
+    getrf = getattr(lib, names[0], None)
+    getri = getattr(lib, names[1], None)
+    if getrf is None or getri is None:
+        return False
+    import ctypes
+    i64 = ctypes.c_int64
+    n = A.shape[0]
+    ipiv = np.empty(n, dtype=np.int64)
+    a_ptr = A.ctypes.data_as(ctypes.c_void_p)
+    ipiv_ptr = ipiv.ctypes.data_as(ctypes.c_void_p)
+    m = i64(n)
+    lda = i64(n)
+    info = i64(0)
+    getrf(ctypes.byref(m), ctypes.byref(m), a_ptr, ctypes.byref(lda),
+          ipiv_ptr, ctypes.byref(info))
+    if info.value != 0:
+        raise np.linalg.LinAlgError("singular matrix (LAPACK getrf)")
+    wk = np.empty(1, dtype=A.dtype)
+    lwork = i64(-1)
+    info = i64(0)
+    getri(ctypes.byref(m), a_ptr, ctypes.byref(lda), ipiv_ptr,
+          wk.ctypes.data_as(ctypes.c_void_p), ctypes.byref(lwork),
+          ctypes.byref(info))
+    if info.value != 0:
+        return False
+    work = np.empty(int(wk[0]), dtype=A.dtype)
+    lwork = i64(int(wk[0]))
+    info = i64(0)
+    getri(ctypes.byref(m), a_ptr, ctypes.byref(lda), ipiv_ptr,
+          work.ctypes.data_as(ctypes.c_void_p), ctypes.byref(lwork),
+          ctypes.byref(info))
+    if info.value != 0:
+        raise np.linalg.LinAlgError("inverse failed (LAPACK getri)")
+    return True
+
+
+def _binary_float32(X: np.ndarray) -> np.ndarray:
+    """Return X binarised as float32, without copying when X already is a
+    binary float32 matrix (the pipeline's training matrices always are).
+    Avoiding the copy saves one full matrix of memory on wide catalogues;
+    the values are identical either way."""
+    if X.dtype == np.float32 and np.all((X == 0) | (X == 1)):
+        return X
+    return (X > 0).astype(np.float32)
+
+
 class RandomRanker:
     name = "Random"
 
@@ -55,7 +154,7 @@ class ItemKNN:
         self.shrink = shrink
 
     def fit(self, X: np.ndarray, exposure: np.ndarray | None = None):
-        X = (X > 0).astype(np.float32)
+        X = _binary_float32(X)
         self.X = X
         n_items = X.shape[1]
         self.n_items = n_items
@@ -106,22 +205,42 @@ class EASE:
         self.lam = lam
 
     def fit(self, X: np.ndarray, exposure: np.ndarray | None = None):
-        X = (X > 0).astype(np.float32)
+        X = _binary_float32(X)
         n_items = X.shape[1]
         self.n_items = n_items
         dtype = np.float64 if n_items <= 6000 else np.float32
         gram = np.zeros((n_items, n_items), dtype=dtype)
-        block = 512
-        for s in range(0, X.shape[0], block):
-            xb = X[s:s + block].astype(dtype)
-            gram += xb.T @ xb
+        # Accumulate the Gram matrix in column blocks so the product
+        # temporary is one (n_items x block) slab, not a second full
+        # matrix. The entries are the same sums, grouped differently.
+        col_block = 1024
+        for cs in range(0, n_items, col_block):
+            ce = min(n_items, cs + col_block)
+            acc = np.zeros((n_items, ce - cs), dtype=dtype)
+            for s in range(0, X.shape[0], 512):
+                rows = X[s:s + 512]
+                if dtype != X.dtype:
+                    rows = rows.astype(dtype)
+                acc += rows.T @ rows[:, cs:ce]
+            gram[:, cs:ce] = acc
         gram[np.diag_indices(n_items)] += self.lam
-        P = np.linalg.inv(gram)
-        del gram
+        # Invert in place via LAPACK when possible: np.linalg.inv copies
+        # the matrix first, and that copy was the pipeline's kill point
+        # on the shared VM (DECISIONS.md D11).
+        if _inv_inplace_lapack(gram):
+            P = gram
+        else:
+            P = np.linalg.inv(gram)
+            del gram
         diag = np.diag(P).copy()
-        B = -P / diag[None, :]
-        np.fill_diagonal(B, 0.0)
-        self.B = B.astype(np.float32)
+        # Scale P in place into B: a separate (-P / diag) temporary would
+        # cost a third full matrix of peak memory on wide catalogues. The
+        # divide-then-negate order reproduces -P / diag bit for bit (the
+        # negation is exact), so no value changes.
+        P /= diag[None, :]
+        P *= -1.0
+        np.fill_diagonal(P, 0.0)
+        self.B = P.astype(np.float32, copy=False)
         return self
 
     def scores(self, users: np.ndarray, X: np.ndarray | None = None) -> np.ndarray:

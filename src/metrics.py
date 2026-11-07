@@ -32,7 +32,21 @@ def exact_per_user(scores: np.ndarray, rel: np.ndarray, k: int = K) -> dict:
     rel is a binary relevance matrix with the same shape as scores. Users
     with zero relevant items get NaN for NDCG/Recall/MRR and are excluded by
     callers through the returned mask.
+
+    Rows are processed in blocks of 512 when the matrix is large, so the
+    float64 working copies stay small on wide catalogues. Every per-user
+    quantity is row-independent, so blocking changes no value.
     """
+    scores = np.asarray(scores)
+    rel = np.asarray(rel)
+    if scores.shape[0] > 512:
+        parts = [_exact_block(scores[s:s + 512], rel[s:s + 512], k)
+                 for s in range(0, scores.shape[0], 512)]
+        return {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
+    return _exact_block(scores, rel, k)
+
+
+def _exact_block(scores: np.ndarray, rel: np.ndarray, k: int = K) -> dict:
     scores = np.asarray(scores, dtype=np.float64)
     rel = np.asarray(rel, dtype=np.float64)
     n_users = scores.shape[0]
@@ -71,7 +85,10 @@ def sampled_per_user(scores: np.ndarray, rel: np.ndarray, m: int = 100,
     the candidate negative count actually used per user.
     """
     rng = np.random.default_rng(seed)
-    scores = np.asarray(scores, dtype=np.float64)
+    # Only single rows of scores are read below, so the matrix is kept in
+    # its stored dtype: no full-size float64 copy is materialised. Row
+    # values are unchanged, so sampled ranks are identical.
+    scores = np.asarray(scores)
     rel = np.asarray(rel)
     n_users, n_items = scores.shape
     discounts = 1.0 / np.log2(np.arange(2, k + 2))

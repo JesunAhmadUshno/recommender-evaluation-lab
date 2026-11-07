@@ -8,3 +8,5 @@ venv/
 *.egg-info/
 .pytest_cache/
 results/*.tmp
+# Resumability bundles are regenerable working state, not results.
+results/bundles/

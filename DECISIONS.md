@@ -93,3 +93,86 @@ role it has here. KuaiRec's small matrix remains the only ground-truth
 arm. MovieLens-1M replicates the temporal-versus-random and
 sampled-versus-exact comparisons on a sparse, widely used corpus, and
 only derived statistics are published.
+
+## D10. Memory blocking in the metric functions (implementation only)
+The first Arm T (KuaiRec big) run died silently immediately after the
+split line was logged, with no traceback and no partial tables, while
+the shared VM was also carrying another build's heavy stage. The
+pattern is consistent with the process being killed under memory
+pressure: the metric functions materialised full-size float64 copies of
+the 6,638 x 10,728 score and relevance matrices (about 570 MB each) on
+top of the loader arrays and the training matrix. src/metrics.py now
+evaluates exact metrics in row blocks of 512 and no longer converts the
+full score matrix inside the sampled-metric loop (only single rows are
+read there). Every per-user quantity is row-independent and the
+float32 to float64 conversion is exact, so no computed value changes;
+the 23 unit tests pass unchanged. No hypothesis, verdict rule, seed, or
+protocol element is affected, so PREREG.md needs no amendment.
+
+## D11. Stage Arm T restructured ranker by ranker (implementation only)
+Even after D10, the Arm T (KuaiRec big) process was killed silently
+three times at a peak RSS of about 2.5 GB while the shared VM carried
+another build's heavy stage; a control allocation test confirmed that
+a single process on this VM is killed at about 2.6 to 2.7 GB RSS under
+current load, and a standalone reproduction of the first tuning step
+completed at a 2,559 MB peak, just under the wire. The binding
+constraint is therefore the process peak, not the design. Changes, all
+value-preserving by construction: tuning evaluates validation NDCG in
+blocks of 512 users; the test relevance matrix is dropped during
+tuning and restored after; each ranker is fitted, scored, and measured
+(sampled, popularity, cold-start) before the next fit, so only one
+full score matrix is alive at a time; stages load only the datasets
+they need; the ranker fits reuse an already-binary float32 training
+matrix instead of copying it. A fourth run then died inside the first
+EASE tuning fit, so two more cuts followed: the EASE Gram matrix is
+accumulated in column blocks (the product temporary is one slab, not a
+second full matrix; the entries are the same sums grouped
+differently), and the raw event arrays plus the validation matrix are
+parked outside the arm during tuning and evaluation and restored
+before the leakage check. Two more runs still died inside the first
+EASE fit (a standalone reproduction of that fit was SIGKILLed at a
+1,608 MB pre-fit peak while the neighbouring build's database stage
+cycled), so evaluation was split into fit and measure phases: no
+relevance or score matrix is alive while a fit runs, score matrices
+are assembled and masked in blocks of 512 users, and the validation
+matrix is parked during tuning fits. The EASE weight matrix is also
+built in place (divide, then negate) instead of as a separate
+temporary; a direct comparison against the original formulation on
+synthetic matrices at 700 and 7,000 items gave a maximum absolute
+difference of 0.0. Verification of the split: on MovieLens-1M with the
+committed chosen configs, fit-plus-measure reproduced the committed
+exact NDCG@10 for all five rankers to below 1e-12 (Random 0.012974,
+Popularity 0.153566, ItemKNN 0.150368, EASE 0.144017, iALS 0.130261).
+No hypothesis, verdict rule, seed, grid, or protocol element changed.
+
+## D12. Every stage is resumable (the VM reboots about every two hours)
+During this build the VM rebooted at about 02:08 and again at about
+04:01 UTC, killing every running process each time, and the shared
+neighbour build's database stage added memory pressure between
+reboots. Long stages therefore persist progress as they go: tuning
+rows are written the moment each config finishes and are reused on
+the next run (chosen configs are still the argmax over the full grid
+table); each Arm T and Arm F ranker writes a bundle (its table rows
+plus per-user arrays, or its score matrix for Arm F) keyed by the
+chosen config it was computed under, and a rerun reloads bundles
+instead of refitting; the random-split stage keeps only complete
+five-ranker seeds and persists each finished seed; the Arm F pool
+sensitivity and exposure parts skip when their output tables already
+exist. Bundles live in results/bundles/ and are gitignored as
+regenerable working state. Nothing about the design changes: the
+same fits, seeds, and computations produce the tables, only their
+persistence order differs.
+
+## D13. Fresh single-pass execution on BlackBoxV3 (founder order)
+The Arm T execution history on the shared Muse VM fragmented across
+nine runs: repeated silent kills under memory pressure (D10, D11),
+two worker failures, and VM restarts about every two hours (D12).
+The tables produced that way are stitched from resumes. On 2026-11-07
+the founder ordered a fresh start: one clean pass. The partial
+results are preserved outside the repo (gap-closure backup,
+pre-fresh-restart snapshot of 2026-11-07) and are superseded as the
+results of record. The fresh pass runs on BlackBoxV3 (Intel i5-8400,
+6 cores, 7.1 GiB RAM, Ubuntu 26.04), a dedicated machine with no
+competing load; it is the machine of record for every timing this
+pass produces, and the timing tables and AUDIT.md must name it. No
+hypothesis, verdict rule, seed, split, or protocol element changes.

@@ -34,6 +34,7 @@ from src.stats import holm_adjust, kendall_tau_b, paired_bootstrap  # noqa: E402
 RAW = ROOT / "data" / "raw"
 RESULTS = ROOT / "results"
 TABLES = RESULTS / "tables"
+BUNDLES = RESULTS / "bundles"
 CACHE = RAW / "cache"
 
 RANKER_ORDER = ["Random", "Popularity", "ItemKNN", "EASE", "iALS"]
@@ -93,11 +94,20 @@ def load_cached(name: str, loader, path: str) -> dict:
     return d
 
 
+def load_big() -> dict:
+    return load_cached("kuairec_big", load_kuairec, str(RAW / "big_matrix.csv"))
+
+
+def load_small() -> dict:
+    return load_cached("kuairec_small", load_kuairec, str(RAW / "small_matrix.csv"))
+
+
+def load_ml() -> dict:
+    return load_cached("ml1m", load_ml1m, str(RAW / "ml-1m" / "ratings.dat"))
+
+
 def load_all() -> tuple[dict, dict, dict]:
-    big = load_cached("kuairec_big", load_kuairec, str(RAW / "big_matrix.csv"))
-    small = load_cached("kuairec_small", load_kuairec, str(RAW / "small_matrix.csv"))
-    ml = load_cached("ml1m", load_ml1m, str(RAW / "ml-1m" / "ratings.dat"))
-    return big, small, ml
+    return load_big(), load_small(), load_ml()
 
 
 def make_ranker(name: str, config: dict, seed: int = 0):
@@ -158,27 +168,59 @@ class TemporalArm:
         users = np.unique(u)
         return rel, users
 
-    def tune(self) -> tuple[dict, list[dict]]:
+    def tune(self, done: dict | None = None, on_new_row=None) -> tuple[dict, list[dict]]:
+        """Tune each ranker on the validation window. `done` maps
+        (ranker, config-json-sorted) to a previously computed tuning row
+        (the VM reboots roughly every two hours; tuning is resumable so
+        a reboot loses at most the config in flight). on_new_row(row)
+        is called after each newly computed row so the caller can
+        persist it immediately."""
         rows: list[dict] = []
         chosen: dict[str, dict] = {"Random": {}, "Popularity": {}}
-        val_rel = self.val_rel[self.val_users]
-        X_val = self.X_train[self.val_users]
+        done = done or {}
         for name, grid in GRIDS.items():
             best, best_val = None, -np.inf
             for cfg in grid:
-                t0 = time.perf_counter()
-                model = make_ranker(name, cfg)
-                model.fit(self.X_train, self.exposure_train)
-                scores = score_ranker(model, name, self.val_users, self.X_train)
-                scores = mask_seen(scores, X_val)
-                ndcg = np.nanmean(metrics.exact_per_user(scores, val_rel)["ndcg"])
-                rows.append({"arm": self.arm, "ranker": name, "config": json.dumps(cfg),
-                             "val_ndcg": float(ndcg), "fit_seconds": time.perf_counter() - t0})
-                log(f"{self.arm} tune {name} {cfg} -> val NDCG {ndcg:.4f}")
+                key = (name, json.dumps(cfg, sort_keys=True))
+                if key in done:
+                    prev = done[key]
+                    ndcg = float(prev["val_ndcg"])
+                    row = {"arm": self.arm, "ranker": name, "config": json.dumps(cfg),
+                           "val_ndcg": ndcg,
+                           "fit_seconds": float(prev.get("fit_seconds", 0.0))}
+                    log(f"{self.arm} tune {name} {cfg} -> val NDCG {ndcg:.4f} (resumed)")
+                else:
+                    t0 = time.perf_counter()
+                    model = make_ranker(name, cfg)
+                    val_rel = self.val_rel
+                    self.val_rel = None  # the fit never reads it; park it (D11)
+                    model.fit(self.X_train, self.exposure_train)
+                    self.val_rel = val_rel
+                    ndcg = self._val_ndcg(model, name)
+                    row = {"arm": self.arm, "ranker": name, "config": json.dumps(cfg),
+                           "val_ndcg": float(ndcg), "fit_seconds": time.perf_counter() - t0}
+                    log(f"{self.arm} tune {name} {cfg} -> val NDCG {ndcg:.4f}")
+                    if on_new_row is not None:
+                        on_new_row(row)
+                rows.append(row)
                 if ndcg > best_val:
                     best, best_val = cfg, float(ndcg)
             chosen[name] = best
         return chosen, rows
+
+    def _val_ndcg(self, model, name: str) -> float:
+        """Mean validation NDCG@10, evaluated in blocks of 512 users so no
+        full-width score or relevance copy is materialised. Per-user NDCG
+        is row-independent, so the blocked mean is the same number as the
+        whole-matrix mean (up to float summation order in the final mean).
+        """
+        parts = []
+        for s in range(0, self.val_users.size, 512):
+            bu = self.val_users[s:s + 512]
+            sc = score_ranker(model, name, bu, self.X_train)
+            sc = mask_seen(sc, self.X_train[bu])
+            parts.append(metrics.exact_per_user(sc, self.val_rel[bu])["ndcg"])
+        return float(np.nanmean(np.concatenate(parts)))
 
     def evaluate(self, chosen: dict):
         """Fit final models, score test users once, return (scores, per-user
@@ -238,6 +280,95 @@ class TemporalArm:
                                 "seconds": t_fit, "peak_mb": peak_mb()})
             timing_rows.append({"arm": self.arm, "ranker": name, "stage": "score_test",
                                 "seconds": t_score, "peak_mb": peak_mb()})
+        return scores, per_user, timing_rows
+
+    def fit_ranker(self, name: str, chosen: dict):
+        """Fit one ranker (or the seed set for Random / iALS) with its
+        chosen config and return (model_or_models, timing_rows). Split
+        from measurement so the caller can hold no relevance or score
+        matrix while the fit's transient memory (the EASE Gram inverse
+        above all) is live (DECISIONS.md D11). Mirrors the fit halves of
+        evaluate() branch for branch."""
+        timing_rows: list[dict] = []
+        if name == "Random":
+            models = [RandomRanker(seed=s).fit(self.X_train) for s in range(5)]
+            return models, timing_rows
+        if name == "iALS":
+            cfg = dict(chosen[name])
+            cfg["iterations"] = FINAL_IALS_ITERATIONS
+            models = []
+            t_fit = 0.0
+            for s in IALS_SEEDS:
+                t0 = time.perf_counter()
+                model = make_ranker(name, cfg, seed=s)
+                model.fit(self.X_train, self.exposure_train)
+                t_fit += time.perf_counter() - t0
+                models.append(model)
+            timing_rows.append({"arm": self.arm, "ranker": name, "stage": "fit_x5seeds",
+                                "seconds": t_fit, "peak_mb": peak_mb()})
+            return models, timing_rows
+        cfg = chosen.get(name, {})
+        t0 = time.perf_counter()
+        model = make_ranker(name, cfg)
+        model.fit(self.X_train, self.exposure_train)
+        timing_rows.append({"arm": self.arm, "ranker": name, "stage": "fit",
+                            "seconds": time.perf_counter() - t0, "peak_mb": peak_mb()})
+        return model, timing_rows
+
+    def measure_ranker(self, name: str, models, test_rel: np.ndarray):
+        """Score the test users for a fitted ranker and return (scores,
+        per-user exact metrics, timing rows). Mirrors the measurement
+        halves of evaluate(). ItemKNN, EASE, and iALS scores are
+        row-independent, so their score matrices are assembled in blocks
+        of 512 users and masked block by block: identical values, no
+        full-width mask copy. The Random ranker's stream depends on the
+        first requested user, so it is scored in one call, as before."""
+        timing_rows: list[dict] = []
+        if name == "Random":
+            X_test = self.X_train[self.test_users]
+            acc = []
+            keep = None
+            for model in models:
+                sc = mask_seen(model.scores(self.test_users), X_test)
+                if keep is None:
+                    keep = sc
+                acc.append(metrics.exact_per_user(sc, test_rel))
+            per_user = {k: np.nanmean(np.vstack([a[k] for a in acc]), axis=0)
+                        for k in acc[0]}
+            return keep, per_user, timing_rows
+        if name == "iALS":
+            n = self.test_users.size
+            exact_parts: list[list[dict]] = [[] for _ in models]
+            acc_blocks = []
+            for s in range(0, n, 512):
+                bu = self.test_users[s:s + 512]
+                rel_b = test_rel[s:s + 512]
+                sc_acc = None
+                for mi, model in enumerate(models):
+                    sc = score_ranker(model, name, bu, self.X_train)
+                    exact_parts[mi].append(metrics.exact_per_user(
+                        mask_seen(sc, self.X_train[bu]), rel_b))
+                    sc_acc = sc if sc_acc is None else sc_acc + sc
+                acc_blocks.append(mask_seen(sc_acc / len(models), self.X_train[bu]))
+            scores = np.vstack(acc_blocks)
+            per_user = {}
+            for k in exact_parts[0][0]:
+                per_seed = [np.concatenate([blk[k] for blk in parts])
+                            for parts in exact_parts]
+                per_user[k] = np.nanmean(np.vstack(per_seed), axis=0)
+            return scores, per_user, timing_rows
+        model = models
+        t0 = time.perf_counter()
+        blocks = []
+        for s in range(0, self.test_users.size, 512):
+            bu = self.test_users[s:s + 512]
+            sc = score_ranker(model, name, bu, self.X_train)
+            blocks.append(mask_seen(sc, self.X_train[bu]))
+        scores = np.vstack(blocks)
+        t_score = time.perf_counter() - t0
+        per_user = metrics.exact_per_user(scores, test_rel)
+        timing_rows.append({"arm": self.arm, "ranker": name, "stage": "score_test",
+                            "seconds": t_score, "peak_mb": peak_mb()})
         return scores, per_user, timing_rows
 
 
@@ -339,25 +470,175 @@ def cold_start_rows(arm: TemporalArm, scores: dict[str, np.ndarray]) -> list[dic
     return rows
 
 
+def _metric_row(arm_name: str, name: str, pu: dict) -> dict:
+    """One ranker's row of arm_metrics.csv; same construction as
+    arm_metric_rows for a full per-user dict."""
+    row = {"arm": arm_name, "ranker": name}
+    for key in ("ndcg", "dcg", "recall", "mrr", "hr"):
+        mean, lo, hi = mean_ci(pu[key])
+        row[key] = mean
+        if key == "ndcg":
+            row["ndcg_ci_lo"], row["ndcg_ci_hi"] = lo, hi
+    row["n_users"] = int((~np.isnan(pu["ndcg"])).sum())
+    return row
+
+
+def _sampled_rows_for(arm_name: str, name: str, scores: np.ndarray,
+                      rel: np.ndarray, n_items: int,
+                      exclude: np.ndarray | None) -> list[dict]:
+    """One ranker's sampled-metrics rows; same computation as
+    sampled_rows restricted to a single ranker."""
+    rows = []
+    n_pos = (rel > 0).sum(axis=1)
+    for seed in SAMPLING_SEEDS:
+        out = metrics.sampled_per_user(scores, rel, m=100, seed=seed,
+                                       exclude=exclude)
+        corr = metrics.corrected_ndcg(out["pos_ranks"], n_items=n_items, m=100,
+                                      n_pos_per_user=n_pos)
+        rows.append({"arm": arm_name, "ranker": name, "seed": seed,
+                     "sampled_ndcg": float(np.nanmean(out["ndcg"])),
+                     "corrected_ndcg": float(np.nanmean(corr))})
+    log(f"{arm_name} sampled done: {name}")
+    return rows
+
+
+def _cold_rows_for(arm: TemporalArm, name: str, scores: np.ndarray,
+                   test_rel_rows: np.ndarray, rel_slice: np.ndarray,
+                   cold_users: np.ndarray) -> list[dict]:
+    """One ranker's cold-start rows; same slices as cold_start_rows."""
+    rows = []
+    for slice_name, rel_s, user_sel in (
+        ("item_cold", rel_slice, None),
+        ("user_cold", test_rel_rows, cold_users),
+    ):
+        sc = scores
+        rel_use = rel_s
+        if user_sel is not None:
+            if user_sel.sum() == 0:
+                rows.append({"arm": arm.arm, "slice": slice_name, "ranker": name,
+                             "n_users": 0, "ndcg": None, "recall": None, "mrr": None})
+                continue
+            sc = sc[user_sel]
+            rel_use = rel_s[user_sel]
+        pu = metrics.exact_per_user(sc, rel_use)
+        rows.append({"arm": arm.arm, "slice": slice_name, "ranker": name,
+                     "n_users": int((~np.isnan(pu["ndcg"])).sum()),
+                     "ndcg": float(np.nanmean(pu["ndcg"])) if (~np.isnan(pu["ndcg"])).any() else None,
+                     "recall": float(np.nanmean(pu["recall"])) if (~np.isnan(pu["recall"])).any() else None,
+                     "mrr": float(np.nanmean(pu["mrr"])) if (~np.isnan(pu["mrr"])).any() else None})
+    return rows
+
+
 def stage_arm_t(arm_name: str, d: dict, pos: np.ndarray, chosen_out: dict) -> None:
     arm = TemporalArm(arm_name, d, pos)
     log(f"{arm_name}: cutoffs t1={arm.t1:.1f} t2={arm.t2:.1f}; "
         f"train {int(arm.tr_m.sum())} val {int(arm.va_m.sum())} test {int(arm.te_m.sum())}; "
         f"test users {arm.test_users.size}")
-    chosen, tuning = arm.tune()
+    # Memory discipline on the shared VM (DECISIONS.md D11): the raw
+    # event arrays are not needed again until the leakage check, and the
+    # test relevance matrix is not needed during tuning. Both are parked
+    # outside the arm while the heavy fits run and restored afterwards.
+    saved = {k: d[k] for k in ("user", "item", "timestamp") if k in d}
+    for k in saved:
+        d[k] = np.empty(0, dtype=saved[k].dtype)
+    test_rel, test_users = arm.test_rel, arm.test_users
+    arm.test_rel = None
+    arm.test_users = None
+    # Resumable tuning: rows already in the tuning CSV are reused and
+    # each new row is persisted the moment it is computed (D12).
+    tuning_rows_saved: list[dict] = []
+    tuning_path = TABLES / f"tuning_{arm_name}.csv"
+    if tuning_path.exists():
+        with open(tuning_path, newline="") as fh:
+            tuning_rows_saved = list(csv.DictReader(fh))
+    done = {(r["ranker"], json.dumps(json.loads(r["config"]), sort_keys=True)): r
+            for r in tuning_rows_saved}
+
+    def _persist_tuning_row(row: dict) -> None:
+        tuning_rows_saved.append(row)
+        write_csv(f"tuning_{arm_name}.csv", tuning_rows_saved)
+
+    chosen, tuning = arm.tune(done=done, on_new_row=_persist_tuning_row)
+    arm.test_rel, arm.test_users = test_rel, test_users
+    arm.val_rel = None  # validation matrix is dead weight from here on
     chosen_out[arm_name] = chosen
     write_csv(f"tuning_{arm_name}.csv", tuning)
-    scores, per_user, timing = arm.evaluate(chosen)
-    write_csv("arm_metrics.csv", _merge_existing("arm_metrics.csv", arm_metric_rows(arm_name, per_user), "arm", arm_name))
-    write_csv("pairwise.csv", _merge_existing("pairwise.csv", pairwise_rows(arm_name, per_user), "arm", arm_name))
-    write_csv("timings.csv", _merge_existing("timings.csv", timing, "arm", arm_name))
+    # Ranker by ranker from here: each score matrix is freed before the
+    # next fit. Every downstream table is computed from the same scores
+    # the all-at-once path used; only the lifetime of the matrices
+    # differs (DECISIONS.md D11).
+    test_rel_rows = arm.test_rel[arm.test_users]
+    arm.test_rel = None  # the full matrix is dead weight from here (D11)
     exclude = arm.X_train[arm.test_users] > 0
-    srows = sampled_rows(arm_name, scores, arm.test_rel[arm.test_users], d["n_items"], exclude=exclude)
-    write_csv("sampled_metrics.csv", _merge_existing("sampled_metrics.csv", srows, "arm", arm_name))
-    prows = popularity_rows(arm_name, scores, arm.exposure_train)
-    write_csv("popularity_report.csv", _merge_existing("popularity_report.csv", prows, "arm", arm_name))
-    crows = cold_start_rows(arm, scores)
-    write_csv("cold_start.csv", _merge_existing("cold_start.csv", crows, "arm", arm_name))
+    rel_slice = test_rel_rows * (arm.exposure_train < 5)[None, :]
+    cold_users = arm.user_train_counts[arm.test_users] < 5
+    per_user_all: dict[str, dict] = {}
+    metric_rows: list[dict] = []
+    timing_rows: list[dict] = []
+    sampled_all: list[dict] = []
+    pop_rows: list[dict] = []
+    cold_by_slice: dict[str, list[dict]] = {"item_cold": [], "user_cold": []}
+    top_lists = []
+    for name in RANKER_ORDER:
+        # Per-ranker bundle: if a previous (killed) run already finished
+        # this ranker under the same chosen config, reload its rows and
+        # per-user arrays instead of refitting (D12).
+        BUNDLES.mkdir(parents=True, exist_ok=True)
+        bundle_json = BUNDLES / f"{arm_name}__{name}.json"
+        bundle_npz = BUNDLES / f"{arm_name}__{name}.npz"
+        if bundle_json.exists() and bundle_npz.exists():
+            bundle = json.loads(bundle_json.read_text())
+            if bundle.get("config") == chosen.get(name, {}):
+                z = np.load(bundle_npz)
+                per_user = {k: z[k] for k in z.files if k != "top"}
+                top = z["top"]
+                per_user_all[name] = per_user
+                timing_rows.extend(bundle["timing_rows"])
+                metric_rows.append(bundle["metric_row"])
+                sampled_all.extend(bundle["sampled_rows"])
+                top_lists.append(top)
+                pop_rows.append(bundle["pop_row"])
+                for r in bundle["cold_rows"]:
+                    cold_by_slice[r["slice"]].append(r)
+                log(f"{arm_name} {name}: resumed from bundle")
+                continue
+        models, fit_trows = arm.fit_ranker(name, chosen)
+        scores, per_user, meas_trows = arm.measure_ranker(name, models, test_rel_rows)
+        del models
+        ranker_trows = fit_trows + meas_trows
+        timing_rows.extend(ranker_trows)
+        per_user_all[name] = per_user
+        mrow = _metric_row(arm_name, name, per_user)
+        metric_rows.append(mrow)
+        srows = _sampled_rows_for(arm_name, name, scores,
+                                  test_rel_rows, d["n_items"], exclude)
+        sampled_all.extend(srows)
+        top = correction.topk_lists(scores, k=10)
+        top_lists.append(top)
+        prow = {"arm": arm_name, "ranker": name,
+                **audit_mod.popularity_report(top, arm.exposure_train)}
+        pop_rows.append(prow)
+        crows = _cold_rows_for(arm, name, scores, test_rel_rows, rel_slice, cold_users)
+        for r in crows:
+            cold_by_slice[r["slice"]].append(r)
+        del scores
+        np.savez(bundle_npz, top=top, **per_user)
+        bundle_json.write_text(json.dumps(
+            {"config": chosen.get(name, {}),
+             "timing_rows": ranker_trows,
+             "metric_row": mrow, "sampled_rows": srows, "pop_row": prow,
+             "cold_rows": crows}, indent=2))
+    pooled = np.vstack(top_lists)
+    pop_rows.append({"arm": arm_name, "ranker": "POOLED",
+                     **audit_mod.popularity_report(pooled, arm.exposure_train)})
+    cold_rows = cold_by_slice["item_cold"] + cold_by_slice["user_cold"]
+    write_csv("arm_metrics.csv", _merge_existing("arm_metrics.csv", metric_rows, "arm", arm_name))
+    write_csv("pairwise.csv", _merge_existing("pairwise.csv", pairwise_rows(arm_name, per_user_all), "arm", arm_name))
+    write_csv("timings.csv", _merge_existing("timings.csv", timing_rows, "arm", arm_name))
+    write_csv("sampled_metrics.csv", _merge_existing("sampled_metrics.csv", sampled_all, "arm", arm_name))
+    write_csv("popularity_report.csv", _merge_existing("popularity_report.csv", pop_rows, "arm", arm_name))
+    write_csv("cold_start.csv", _merge_existing("cold_start.csv", cold_rows, "arm", arm_name))
+    d.update(saved)  # restore the raw event arrays for the leakage check
     if arm_name == "arm_t_kuairec":
         _leakage_check(arm)
 
@@ -465,8 +746,22 @@ def stage_arm_f(big: dict, small: dict, audit: dict, chosen: dict) -> None:
     scores: dict[str, np.ndarray] = {}
     per_user: dict[str, dict] = {}
     timing: list[dict] = []
+    BUNDLES.mkdir(parents=True, exist_ok=True)
     for name in RANKER_ORDER:
         cfg = cfg_map.get(name, {})
+        bundle_json = BUNDLES / f"arm_f__{name}.json"
+        bundle_npz = BUNDLES / f"arm_f__{name}.npz"
+        if bundle_json.exists() and bundle_npz.exists():
+            bundle = json.loads(bundle_json.read_text())
+            if bundle.get("config") == cfg:
+                z = np.load(bundle_npz)
+                scores[name] = z["scores"]
+                per_user[name] = {k: z[k] for k in z.files if k != "scores"}
+                timing.extend(bundle["timing_rows"])
+                log(f"arm_f {name}: truth NDCG@10 = "
+                    f"{np.nanmean(per_user[name]['ndcg']):.4f} (resumed)")
+                continue
+        t_before = len(timing)
         if name == "iALS":
             acc, sc_acc = [], None
             t0 = time.perf_counter()
@@ -496,6 +791,9 @@ def stage_arm_f(big: dict, small: dict, audit: dict, chosen: dict) -> None:
                            "seconds": time.perf_counter() - t0, "peak_mb": peak_mb()})
             scores[name] = sc
             per_user[name] = metrics.exact_per_user(sc, rel)
+        np.savez(bundle_npz, scores=scores[name], **per_user[name])
+        bundle_json.write_text(json.dumps(
+            {"config": cfg, "timing_rows": timing[t_before:]}, indent=2))
         log(f"arm_f {name}: truth NDCG@10 = {np.nanmean(per_user[name]['ndcg']):.4f}")
     write_csv("arm_metrics.csv", _merge_existing("arm_metrics.csv", arm_metric_rows("arm_f", per_user), "arm", "arm_f"))
     write_csv("pairwise.csv", _merge_existing("pairwise.csv", pairwise_rows("arm_f", per_user), "arm", "arm_f"))
@@ -513,20 +811,26 @@ def stage_arm_f(big: dict, small: dict, audit: dict, chosen: dict) -> None:
                           "n_users": int((~np.isnan(pu["ndcg"])).sum())})
     write_csv("arm_f_label_sensitivity.csv", sens_rows)
     # Sensitivity pool: train before the small-matrix median timestamp.
-    X_sens, exposure_sens, _ = _pool_matrices(big, sens_mask, big2small_item)
-    pool_rows = []
-    for name in RANKER_ORDER:
-        cfg = cfg_map.get(name, {})
-        iters = FINAL_IALS_ITERATIONS if name == "iALS" else None
-        sc = _fit_score_small(name, cfg, X_sens, exposure_sens, small_user_big,
-                              seed=0, iters=iters)
-        pu = metrics.exact_per_user(sc, rel)
-        pool_rows.append({"ranker": name, "ndcg": float(np.nanmean(pu["ndcg"])),
-                          "pool_events": int(sens_mask.sum())})
-        log(f"arm_f sensitivity pool {name}: NDCG {np.nanmean(pu['ndcg']):.4f}")
-    write_csv("arm_f_pool_sensitivity.csv", pool_rows)
+    if len(_read_table("arm_f_pool_sensitivity.csv")) == len(RANKER_ORDER):
+        log("arm_f sensitivity pool: resumed from saved table")
+    else:
+        X_sens, exposure_sens, _ = _pool_matrices(big, sens_mask, big2small_item)
+        pool_rows = []
+        for name in RANKER_ORDER:
+            cfg = cfg_map.get(name, {})
+            iters = FINAL_IALS_ITERATIONS if name == "iALS" else None
+            sc = _fit_score_small(name, cfg, X_sens, exposure_sens, small_user_big,
+                                  seed=0, iters=iters)
+            pu = metrics.exact_per_user(sc, rel)
+            pool_rows.append({"ranker": name, "ndcg": float(np.nanmean(pu["ndcg"])),
+                              "pool_events": int(sens_mask.sum())})
+            log(f"arm_f sensitivity pool {name}: NDCG {np.nanmean(pu['ndcg']):.4f}")
+        write_csv("arm_f_pool_sensitivity.csv", pool_rows)
     write_csv("popularity_slices.csv", _popularity_slices(scores, rel, exposure_pool))
-    _exposure_arm(scores, rel, exposure_pool, pool_events, big, small)
+    if _read_table("exposure_estimates.csv") and _read_table("exposure_tau.csv"):
+        log("exposure arm: resumed from saved tables")
+    else:
+        _exposure_arm(scores, rel, exposure_pool, pool_events, big, small)
 
 
 def _popularity_slices(scores: dict[str, np.ndarray], rel: np.ndarray,
@@ -610,7 +914,17 @@ def _exposure_arm(scores: dict[str, np.ndarray], rel: np.ndarray,
 
 
 def stage_random(big: dict, ml: dict, chosen: dict) -> None:
-    rows: list[dict] = []
+    # Resumable per (dataset, seed): rows from a previous run are kept
+    # only for seeds that completed all five rankers; each finished
+    # seed is persisted immediately (D12).
+    from collections import Counter
+    existing = _read_table("random_split.csv")
+    counts = Counter((r["dataset"], int(r["seed"])) for r in existing)
+    rows: list[dict] = [r for r in existing
+                        if counts[(r["dataset"], int(r["seed"]))] == len(RANKER_ORDER)]
+    done_keys = {(r["dataset"], int(r["seed"])) for r in rows}
+    if rows:
+        log(f"random arm: resuming with {len(done_keys)} completed seeds")
     for ds_name, d, pos_label, cfg_key in (
         ("kuairec_big", big, big["watch_ratio"] > 2.0, "arm_t_kuairec"),
         ("ml1m", ml, ml["rating"] >= 4.0, "arm_t_ml1m"),
@@ -618,6 +932,9 @@ def stage_random(big: dict, ml: dict, chosen: dict) -> None:
         cfg_map = chosen[cfg_key]
         n = d["user"].size
         for seed in SPLIT_SEEDS:
+            if (ds_name, seed) in done_keys:
+                log(f"random arm {ds_name} seed {seed} done (resumed)")
+                continue
             tr_m, _va_m, te_m = split_mod.random_masks(n, seed)
             X_train = binary_matrix(d["user"][tr_m & pos_label], d["item"][tr_m & pos_label],
                                     np.ones(int((tr_m & pos_label).sum())), d["n_users"], d["n_items"])
@@ -643,6 +960,7 @@ def stage_random(big: dict, ml: dict, chosen: dict) -> None:
                 rows.append({"dataset": ds_name, "ranker": name, "seed": seed,
                              "ndcg_random": ndcg, "n_users": int(users.size)})
             log(f"random arm {ds_name} seed {seed} done")
+            write_csv("random_split.csv", rows)
     write_csv("random_split.csv", rows)
 
 
@@ -926,15 +1244,26 @@ def main() -> int:
     if (RESULTS / "data_audit.json").exists():
         audit = json.loads((RESULTS / "data_audit.json").read_text())
     chosen = _load_chosen()
+    # Load only the datasets the requested stage needs: the raw event
+    # arrays are several hundred MB and the VM is shared (D11).
     big = small = ml = None
-    if args.stage in ("arm_t", "arm_f", "random", "all"):
-        big, small, ml = load_all()
+    if args.stage == "arm_t":
+        big = load_big()
     elif args.stage == "ml1m":
-        _b, _s, ml = load_all()
+        ml = load_ml()
+    elif args.stage == "arm_f":
+        big, small = load_big(), load_small()
+    elif args.stage == "random":
+        big, ml = load_big(), load_ml()
+    elif args.stage == "all":
+        big, small, ml = load_all()
 
     if args.stage in ("arm_t", "all"):
         holder: dict = {}
-        stage_arm_t("arm_t_kuairec", big, big["watch_ratio"] > 2.0, holder)
+        pos = big["watch_ratio"] > 2.0
+        if args.stage == "arm_t":
+            del big["watch_ratio"]  # labels are frozen in pos; free the raw array
+        stage_arm_t("arm_t_kuairec", big, pos, holder)
         chosen.update(holder)
         _save_chosen(chosen)
     if args.stage in ("ml1m", "all"):
