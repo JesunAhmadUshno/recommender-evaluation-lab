@@ -1,0 +1,6 @@
+arm,ranker,label_threshold,ndcg,n_users
+arm_f,Random,watch_ratio>1.0,0.32196820426661343,1411
+arm_f,Popularity,watch_ratio>1.0,0.1320084129197193,1411
+arm_f,ItemKNN,watch_ratio>1.0,0.44080471486331446,1411
+arm_f,EASE,watch_ratio>1.0,0.44080471486331446,1411
+arm_f,iALS,watch_ratio>1.0,0.44080471486331446,1411

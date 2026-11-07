@@ -1,0 +1,19 @@
+[02:58:34] verdicts written
+{
+  "H1": "NOT SUPPORTED",
+  "H1a": "SUPPORTED",
+  "H1b": "SUPPORTED",
+  "H2a": "SUPPORTED",
+  "H2b": "NOT SUPPORTED",
+  "H2_replication_arm_t_kuairec": null,
+  "H2_replication_arm_t_ml1m": null,
+  "H3a": "SUPPORTED",
+  "H3b": "SUPPORTED",
+  "H4a": "SUPPORTED",
+  "H4b": "SUPPORTED",
+  "S1": "SUPPORTED",
+  "H5": "SUPPORTED",
+  "H6": "SUPPORTED",
+  "H7": "SUPPORTED",
+  "track": "GO"
+}
