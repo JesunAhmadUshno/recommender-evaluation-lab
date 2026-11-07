@@ -190,3 +190,13 @@ name its machine, and it has no ML-1M iALS score_test row.
 results/headline_table.md is generated from these tables by
 scripts/reproduce_headline.py, so it carries the same status. No
 hypothesis, verdict rule, seed, split, or protocol element changes.
+
+## D15. D14 is superseded by the D13 fresh pass
+The D13 fresh pass (commits b9f4c16 and 2328e3f, BlackBoxV3,
+2026-11-07) regenerated every table D14 called provisional, added the
+Arm F, exposure, random-split, leakage and verdict outputs, and names
+its machine in RESULTS.md. The tables now in results/ are the results
+of record; D14 applies only to the earlier Muse VM tables, which no
+longer exist in results/. RESULTS.md's validity notice on the Arm F
+pool (D5) is unaffected. No hypothesis, verdict rule, seed, split, or
+protocol element changes.
