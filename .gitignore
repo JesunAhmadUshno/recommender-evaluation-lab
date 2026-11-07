@@ -10,3 +10,8 @@ venv/
 results/*.tmp
 # Resumability bundles are regenerable working state, not results.
 results/bundles/
+
+# site build
+site/node_modules/
+site/dist/
+site/.rubric/
