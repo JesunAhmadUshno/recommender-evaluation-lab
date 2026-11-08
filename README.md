@@ -2,86 +2,95 @@
 
 Author: Jesun Ahmad Ushno.
 
-**Live dashboard:** [jesunahmadushno.github.io/recommender-evaluation-lab](https://jesunahmadushno.github.io/recommender-evaluation-lab/), with the D13 run of record, every frozen hypothesis and its computed verdict (including which ones the Arm F defect voids), the recorded arms, and two simulators that run in your browser (sampled-rank correction, synthetic off-policy estimators). Source in `site/`; every number is read from `results/` and the study markdown at build time.
+**Question.** On a dataset where the true answer is known, how far do
+standard offline evaluation shortcuts (sampled metrics, random splits,
+naive evaluation on biased logs) move the measured score and the
+ranking of recommender models, and how much of that error do the
+standard corrections remove?
 
-Offline recommender evaluation, treated as the research object. On a
-fully observed public dataset (KuaiRec), this study measures how far the
-standard offline shortcuts move the answer: sampled metrics against 100
-negatives, random splits against a global-time split, and naive
-evaluation on biased logs against IPS, SNIPS, and doubly robust
-correction. Every estimator is scored against a known ground truth.
-MovieLens-1M replicates the split and sampling comparisons.
+**Headline.** On KuaiRec, a random split inflates exact NDCG@10 over a
+global-time split for all four non-random rankers: ItemKNN scores
+0.0563 under the random split (5 seeds, range 0.0548 to 0.0575) against
+0.00094 under the temporal split (95% bootstrap interval 0.00064 to
+0.00125), about 60x. Six of the 13 locked hypotheses stand on valid
+evidence; the other seven are not usable because the locked fully observed
+arm gives every target user an empty training history.
 
-The transferable asset is experimentation craft: a pre-registered
-design, a leakage audit, estimator bias measured against truth, and
-honest intervals. This is not a claim of production recommender
-experience, and the repo's overclaim guard (PREREG.md section 9) binds
-every statement in it.
+**Field.** ML and AI research. **Job family.** ML evaluation and
+experimentation.
 
-## Status
+**Verdict.** Functional. The plan was locked before any code or metric
+(PREREG.md, tag proposal-v1), tests pass in CI on Python 3.11 and 3.12,
+and the full pipeline ran end to end once on the machine of record
+with stage logs committed. Not Evaluated: the fully observed arm
+(Arm F) is void for the learned rankers, and the field profile's
+ablations and full uncertainty are missing (REPORT.md).
 
-Executed. PREREG.md is frozen in commit
-cab910eb9a66651771ba77656ad7950f6b005f00. The results of record are
-the fresh single pass ordered in DECISIONS.md D13, run 2026-11-07
-on BlackBoxV3 (Intel i5-8400, 6 cores, 7.1 GiB RAM), Python
-3.12.16, all 23 unit tests passing, dataset archives verified
-against the frozen SHA-256 values. Stage logs are in
-logs/fresh-pass-2026-11-07/. Full record: RESULTS.md. Self-audit
-and grade (5,400 of 10,000): AUDIT.md.
+Live dashboard: https://jesunahmadushno.github.io/recommender-evaluation-lab/
+(the D13 run of record, every locked hypothesis with its computed
+verdict and whether the Arm F defect voids it, and two in-browser
+simulators; every number is read from results/ and the study markdown
+at build time).
 
-## Results
+## Reproduce
 
-Headline table: results/headline_table.md (generated from the
-committed tables; CI verifies it cannot drift).
+Checks, anywhere (no dataset needed):
 
-What the valid arms show:
+```text
+pip install -r requirements.txt -e . pytest
+python -m pytest tests -q
+python scripts/reproduce_headline.py --check
+cd site && npm ci && npm run build
+```
 
-- Random splits flatter recommenders badly. On KuaiRec, exact
-  NDCG@10 under a random split exceeds the global-time split for
-  all four non-random rankers, by about 60x for ItemKNN (0.0563 vs
-  0.00094). The leakage audit passes the clean temporal split and
-  flags a planted leak (H3a, H3b: SUPPORTED).
-- Popularity is not a strong baseline here (H1: NOT SUPPORTED). On
-  the first-time-positive test sets it loses to a Random ranker on
-  both KuaiRec arms (Arm T 0.00007 vs 0.00143). ItemKNN and EASE do
-  beat it on Arm T, by small margins with bootstrap support (H1a,
-  H1b: SUPPORTED), and the ItemKNN margin nearly vanishes on
-  cold-start items (H7: SUPPORTED).
-- Sampled metrics (100 negatives) overstate exact NDCG@10 by one
-  to two orders of magnitude on both Arm T datasets, and the
-  rank-mapping correction closes most of that error. On
-  MovieLens-1M the sampled ranking also reorders the rankers
-  against the exact ranking.
+The full study (CPU only, about 55 minutes on BlackBoxV3): fetch the
+two datasets per data/README.md (checksums there and in PREREG.md),
+then run, inside a git clone:
 
-One warning, in brief: verification of this pass proved that the
-Arm F training pool in the frozen design (DECISIONS.md D5) gives
-every target user an empty history, because KuaiRec's small matrix
-is pair-disjoint from its big matrix (zero big events by small
-users on small items). The Arm F rows for ItemKNN, EASE, and iALS
-are therefore artifacts and are void as evidence; six verdicts
-that rest partly on them are published as computed in RESULTS.md
-with an explicit not-usable label. Read the validity notice at the
-top of RESULTS.md before citing any Arm F number.
+```text
+bash experiments/run_all.sh
+```
+
+## Lifecycle
+
+- Question: DONE 2026-11-07
+- Proposal: DONE 2026-11-07
+- Baseline: DONE 2026-11-07
+- Build: DONE 2026-11-07
+- Evaluate: OPEN
+- Report: DONE 2026-11-08
+- Review: OPEN
+- Release: OPEN
+
+Evaluate stays open until Arm F is repaired by a dated PREREG.md
+amendment and rerun; Review waits for an independent re-derivation of
+every headline number.
 
 ## Layout
 
-- `PREREG.md` - the frozen design: hypotheses, verdict rules, splits,
-  seeds, stop rules, overclaim guard.
-- `DECISIONS.md` - every judgement call the build made, recorded openly.
-- `data/README.md` - dataset sources, versions, checksums, licences.
-  Raw data is fetched, never committed.
-- `src/` - split, rankers, metrics, correction, audit, stats.
-- `experiments/` - the audit and the full pipeline (`run_all.sh`).
-- `results/` - derived statistics only (DATA_LICENSE.md applies).
-- `RESULTS.md` - the published verdict, written from the derived data.
-- `AUDIT.md` - the self-audit and grade.
-- Planned, not present yet: `paper/` (a short workshop-format write-up).
-- `site/` - the live dashboard (React + Vite); `npm run build` first runs
-  a known-answer check of its in-browser ports against the repo's tests
-  and committed results.
-- `docs/research-review.md` - a graded research-rigor review of the run of
-  record, with the remaining gaps and the compute each one needs.
-- `docs/related_work.md` - primary sources and the adjusted novelty claim.
+Files named in the locked PREREG.md (PREREG.md, DECISIONS.md,
+results/data_audit.json) keep their names; the second column gives the
+role each file plays in the portfolio standard.
+
+| Path | Role | What it holds |
+| --- | --- | --- |
+| PREREG.md | proposal | The locked design, hypotheses and verdict rules (tag proposal-v1); a test fails if one byte changes |
+| REPORT.md | report | Background, method, every hypothesis scored, misses, threats, field profile, conclusion, review notes |
+| RESULTS.md | results | The run of record's verdict tables and headline numbers (the dashboard parses it) |
+| AUDIT.md | report, evidence | Execution, claim, validity, security, cost and licence audits of the run |
+| DECISIONS.md | decisions | Every judgement call, D1 onward |
+| data/README.md, DATA_LICENSE.md | data | Dataset sources, versions, checksums, licences; raw data is never committed |
+| src/ | code | Split, rankers, metrics, correction, audit, stats |
+| experiments/ | code | The data audit and the full pipeline (run_all.sh, run_all.py) |
+| logs/ | evidence | Stage logs of the run of record (logs/fresh-pass-2026-11-07/) and the earlier fragmented run |
+| results/ | results | Derived statistics only, from the run of record; headline_table.md regenerated by scripts/reproduce_headline.py |
+| scripts/ | code | The headline-table generator |
+| tests/ | tests | Unit tests and the layout and lock test |
+| site/ | dashboard | React and Vite; the build first runs known-answer checks against the tests and committed results |
+| docs/related_work.md | prior work | Primary sources and the adjusted novelty claim |
+
+Planned, not present: `paper/` (a short workshop-format write-up). No
+docs/decisions/ folder: DECISIONS.md is named by the lock.
 
 ## Licences
 

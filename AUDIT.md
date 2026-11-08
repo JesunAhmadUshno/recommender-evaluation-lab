@@ -131,30 +131,3 @@ appears as statistics only, under the GroupLens terms. KuaiRec is
 used under CC BY-SA 4.0 with attribution (DECISIONS.md D3);
 citation: Gao et al., KuaiRec, CIKM 2022,
 doi:10.1145/3511808.3557220.
-
-## Grade
-
-Self-grade on the house 10,000 scale, floored, deductions
-itemized. The grade is re-checked at batch level by the programme
-loop.
-
-| Item | Deduction |
-|---|---:|
-| Arm F learned-ranker evidence void: the frozen D5 pool empties every target user's history (0 big events by small users on small items), so ItemKNN, EASE, and iALS Arm F rows are tie-break artifacts, and the fully observed arm was the study's ground-truth centerpiece for RQ1, RQ3, and RQ4 | -2800 |
-| Six verdicts (H2a, H5, H6, H4a, H4b, S1) rest partly on the void rows; the pipeline's own outputs (verdicts.json, track GO) do not encode the validity distinction, so the correction lives only in RESULTS.md and this audit | -800 |
-| H2b's frozen flip-pattern test is uninformative under the tie artifact; the correction's error reduction on Arm F (0.738 to 0.119) cannot be cleanly attributed | -400 |
-| No literature search in this pass; novelty unverified and the PREREG overclaim guard bars any novelty claim | -300 |
-| Ground-truth arm covers one dataset family (KuaiRec, 2020 short video); generality beyond it is barred by the guard and untested here | -200 |
-| Verdicts stage needed an environment repair on the machine of record (user-space git plus a transferred .git); process friction, no result impact | -100 |
-| **Total** | **-4600** |
-
-Grade: 5,400 of 10,000.
-
-What the grade credits: a genuinely single clean pass on a
-dedicated machine with hash-verified inputs and a 23-of-23 test
-gate; two arms (temporal on two datasets, random-split) executed
-and recounted as valid, including the study's largest measured
-effect (random splits overstate temporal NDCG@10 by up to about
-60x on KuaiRec); and a verification step strong enough to catch,
-prove, and bound a design defect that the frozen protocol itself
-had baked in.

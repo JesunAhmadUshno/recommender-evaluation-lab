@@ -56,8 +56,8 @@ Consequences, stated plainly:
 - Fixing this requires a protocol decision (a new DECISIONS.md
   entry, and a PREREG.md amendment if the pool rule changes). It was
   not patched in this pass: PREREG.md is frozen, and a silent change
-  would destroy the registration's meaning. AUDIT.md grades the
-  study with this defect priced in.
+  would destroy the registration's meaning. AUDIT.md records the
+  defect in its validity audit.
 
 ## Verdicts that stand on valid evidence
 
