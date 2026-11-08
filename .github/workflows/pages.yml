@@ -4,7 +4,7 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ['site/**', 'results/**', 'PREREG.md', 'DECISIONS.md', 'tests/test_metrics.py', '.github/workflows/pages.yml']
+    paths: ['site/**', 'results/**', 'PREREG.md', 'DECISIONS.md', 'RESULTS.md', 'REPORT.md', 'tests/test_metrics.py', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:

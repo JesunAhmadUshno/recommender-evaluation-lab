@@ -6,7 +6,6 @@ import chosen from '../../results/chosen_configs.json';
 import verdicts from '../../results/verdicts.json';
 import armFMeta from '../../results/arm_f_meta.json';
 import resultsMd from '../../RESULTS.md?raw';
-import auditMd from '../../AUDIT.md?raw';
 import metricTests from '../../tests/test_metrics.py?raw';
 import { parseCsv, sampledSummary, parseHypotheses, parseDecisions, preregFacts, section, parseVerdictTable } from './data.js';
 import { simulateSampledRank, holmAdjust, syntheticWorld, simulateOffPolicy, correctedRank } from './stats.js';
@@ -74,7 +73,6 @@ const HYPS = parseHypotheses(prereg).map((h) => {
 const USABLE = HYPS.filter((h) => h.status === 'valid').length;
 const N_VOID = HYPS.filter((h) => h.status === 'void').length;
 const MACHINE = resultsMd.match(/run on (\w+) \(/)?.[1];
-const GRADE = auditMd.match(/Grade: ([\d,]+ of [\d,]+)/)?.[1];
 const ARM_F_USERS = METRICS.find((r) => r.arm === 'arm_f')?.n_users;
 
 const STATUS = [
@@ -109,7 +107,7 @@ function MenuBar() {
       <a className="app" href="#top">Recommender Evaluation Lab</a>
       <a className="m" href={blob('PREREG.md')}>Pre-registration</a>
       <a className="m" href={blob('DECISIONS.md')}>Decisions</a>
-      <a className="m" href={blob('docs/research-review.md')}>Research review</a>
+      <a className="m" href={blob('REPORT.md')}>Report</a>
       <span className="spacer" />
       <span className="status"><i /> D13 run of record · Arm F learned rows void</span>
       <a href={REPO}>GitHub ↗</a>
@@ -197,7 +195,7 @@ function Hero() {
   return (
     <header className="card hero window" id="top" data-title="recommender-evaluation-lab — README.md">
       <div className="head">
-        <p className="eyebrow">Pre-registered study · D13 single pass on {MACHINE} · self-audit {GRADE}</p>
+        <p className="eyebrow">Pre-registered study · D13 single pass on {MACHINE}</p>
         <span className="pill warn">● {N_VOID} of {HYPS.length} verdicts void: Arm F pool defect</span>
       </div>
       <h1>On MovieLens-1M, scoring against {FACTS.m} sampled negatives <em>reverses</em> the model order.</h1>
@@ -728,7 +726,7 @@ function Limits() {
   const items = [
     ['Arm F learned rankers are void', `KuaiRec's small and big matrices share ${audit.arm_f.small_pairs_present_in_big} of ${fmt(audit.arm_f.small_pairs_total)} pairs, so the frozen D5 pool (big-matrix events on small-matrix items) leaves all ${fmt(ARM_F_USERS)} target users with an empty history. ItemKNN, EASE and iALS then return all-zero scores; their Arm F rows are tie-break artifacts and ${N_VOID} verdicts that use them are not usable. Fixing it needs a new protocol decision, not a patch (RESULTS.md).`],
     ['Replication, not verdict', `The reversal is MovieLens-1M (${fmt(N_USERS)} users, ${SUMMARY.seeds.length} sampling seeds). H2a and H2b are frozen on Arm F, so the reversal shown here neither confirms nor refutes them.`],
-    ['One pass, one machine', `Every table comes from the single D13 pass on ${MACHINE}. Nothing has been rerun independently, and the self-audit grade (${GRADE}, AUDIT.md) is the author's own.`],
+    ['One pass, one machine', `Every table comes from the single D13 pass on ${MACHINE}. Nothing has been rerun independently, and the audit (AUDIT.md) is the author's own.`],
     ['Missing uncertainty', 'No bootstrap interval is recorded for the sampled-versus-exact gaps or for the flip rates; arm_metrics.csv carries an interval for NDCG@10 only.'],
     ['Degenerate slice', `The ML-1M item-cold slice holds ${itemCold[0]?.n_users} users and every ranker scores ${itemCold.every((r) => r.ndcg === 0) ? 'exactly 0' : 'near 0'}. It cannot rank models.`],
     ['Synthetic simulators', 'The off-policy playground uses a synthetic matrix and the rank simulator a single synthetic user. Neither is KuaiRec data or an Arm F result.'],

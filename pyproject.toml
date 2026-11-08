@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recommender-evaluation-lab"
-version = "1.0.0"
+version = "0.1.0"
 description = "Offline recommender evaluation as the research object: sampled-metric bias, temporal leakage, and off-policy correction, measured against a fully observed ground truth."
 readme = "README.md"
 license = { text = "Apache-2.0" }

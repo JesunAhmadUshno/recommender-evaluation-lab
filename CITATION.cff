@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "recommender-evaluation-lab: offline recommender evaluation shortcuts measured against a fully observed ground truth, a pre-registered study"
+authors:
+  - family-names: Ushno
+    given-names: Jesun Ahmad
+repository-code: "https://github.com/JesunAhmadUshno/recommender-evaluation-lab"
+license: Apache-2.0
+date-released: 2026-11-08
