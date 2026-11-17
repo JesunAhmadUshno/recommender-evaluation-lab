@@ -157,7 +157,7 @@ const Recorded = ({ src }) => <span className="pill info">Recorded · <a href={b
 export default function App() {
   useReveal();
   return (
-    <div className="wrap">
+    <div className="wrap"><a className="skip" href="#top">Skip to content</a>
       <MenuBar />
       <div className="glow" aria-hidden="true" />
       <Hero />
@@ -177,7 +177,7 @@ export default function App() {
       <footer>
         Code: Apache-2.0. Derived KuaiRec data in <code>results/</code>: CC BY-SA 4.0 (Gao et al., CIKM 2022). MovieLens-1M figures are statistics only, under the GroupLens terms; no raw rows of either dataset ship with this page.
         Every number is read from <code>results/</code> or the study's markdown at build time; the two simulators run in your browser.
-      </footer>
+      <nav className="support" aria-label="Support this work"><a href="https://github.com/sponsors/JesunAhmadUshno">Sponsor this work</a><a href="https://github.com/sponsors/JesunAhmadUshno">Donate</a><a href="https://buymeacoffee.com/jesun">Buy Me a Coffee</a><a href="https://calendly.com/jesunahmadushno/30min">Work with me</a></nav></footer>
     </div>
   );
 }
@@ -193,7 +193,7 @@ function Hero() {
   const sameOrder = order('sampled') === order('corrected');
   const allSeeds = nrPairs.filter((p) => p.sampledFlips === p.seeds).length;
   return (
-    <header className="card hero window" id="top" data-title="recommender-evaluation-lab — README.md">
+    <header className="card hero window" id="top" data-title="recommender-evaluation-lab - README.md">
       <div className="head">
         <p className="eyebrow">Pre-registered study · D13 single pass on {MACHINE}</p>
         <span className="pill warn">● {N_VOID} of {HYPS.length} verdicts void: Arm F pool defect</span>
@@ -224,7 +224,7 @@ function Hero() {
 
 function Hypotheses() {
   return (
-    <section id="hyp" className="card window reveal" data-title="prereg.md — Hypotheses">
+    <section id="hyp" className="card window reveal" data-title="prereg.md - Hypotheses">
       <p className="eyebrow">Frozen verdict rules · PREREG section 6</p>
       <h2>{HYPS.length} rules frozen before any metric was computed. <em>{USABLE}</em> stand on valid evidence.</h2>
       <p className="sub">Each card quotes its rule from <a href={blob('PREREG.md')}>PREREG.md</a>, the verdict the pipeline computed from <a href={blob('results/verdicts.json')}>verdicts.json</a>, and the evidence line from <a href={blob('RESULTS.md')}>RESULTS.md</a>. Cards marked void are shown as computed, but their evidence includes the Arm F learned-ranker rows that RESULTS.md declares void; do not cite them. No verdict is filled in by hand.</p>
@@ -255,7 +255,7 @@ function Reversal() {
   const SW = 440, rowH = 34, SH = r.length * rowH + 34, l = 84, rr = 16, smax = Math.ceil(Math.max(...r.flatMap((x) => [...x.sampledSeeds, ...x.correctedSeeds, x.exact])) * 10) / 10;
   const sx = (v) => l + (v / smax) * (SW - l - rr);
   return (
-    <section id="reversal" className="card window reveal" data-title="sampled_vs_exact.csv — The reversal">
+    <section id="reversal" className="card window reveal" data-title="sampled_vs_exact.csv - The reversal">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · {ARM_LABEL[ARM]}</p>
@@ -340,7 +340,7 @@ function Simulator() {
   const by = (c) => pad.t + (1 - c / peak) * (H - pad.t - pad.b);
   const preset = presets.find((p) => p[2] === n)?.[0] ?? 'custom';
   return (
-    <section id="sim" className="card window reveal" data-title="rank_mapping.sim — Sampled-rank simulator">
+    <section id="sim" className="card window reveal" data-title="rank_mapping.sim - Sampled-rank simulator">
       <div className="head">
         <div>
           <p className="eyebrow">Live · computed in your browser</p>
@@ -400,7 +400,7 @@ function Leaderboard() {
   const x = (v) => l + (v / max) * (W - l - rr);
   const label = { ndcg: 'NDCG@10', recall: 'Recall@10', mrr: 'MRR@10', hr: 'HR@10' };
   return (
-    <section id="board" className="card window reveal" data-title="arm_metrics.csv — Leaderboard">
+    <section id="board" className="card window reveal" data-title="arm_metrics.csv - Leaderboard">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · {ARM_LABEL[ARM]} · exact metrics</p>
@@ -434,7 +434,7 @@ function Holm() {
   const x = (v) => l + ((v - lo) / (hi - lo)) * (W - l - rr);
   const pTxt = (p) => (p === 0 ? `0 (no resample crossed 0)` : p.toFixed(3));
   return (
-    <section id="holm" className="card window reveal" data-title="pairwise.csv — Holm table">
+    <section id="holm" className="card window reveal" data-title="pairwise.csv - Holm table">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded p values · Holm recomputed live</p>
@@ -482,7 +482,7 @@ function Popularity() {
   const [k, setK] = useState('top1pct_share');
   const rows = POP.filter((r) => r.arm === ARM);
   return (
-    <section id="pop" className="card window reveal" data-title="popularity_report.csv — Head-heaviness">
+    <section id="pop" className="card window reveal" data-title="popularity_report.csv - Head-heaviness">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · {ARM_LABEL[ARM]} · top-10 lists</p>
@@ -516,7 +516,7 @@ function ColdStart() {
   const y = (v) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
   const shade = { full: 1, user_cold: 0.6, item_cold: 0.3 };
   return (
-    <section id="cold" className="card window reveal" data-title="cold_start.csv — Cold slices">
+    <section id="cold" className="card window reveal" data-title="cold_start.csv - Cold slices">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · {ARM_LABEL[ARM]}</p>
@@ -556,7 +556,7 @@ function Tuning() {
   const max = Math.max(...rows.map((r) => r.val_ndcg));
   const groups = [...new Set(rows.map((r) => r.ranker))];
   return (
-    <section id="tuning" className="card window reveal" data-title={`tuning_arm_t_${ds}.csv — Validation grids`}>
+    <section id="tuning" className="card window reveal" data-title={`tuning_arm_t_${ds}.csv - Validation grids`}>
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · validation window only</p>
@@ -608,7 +608,7 @@ function OffPolicy() {
   const W = 720, rowH = 40, H = res.names.length * rowH + 34, l = 150, rr = 16;
   const x = (v) => l + (v / max) * (W - l - rr);
   return (
-    <section id="ips" className="card window reveal" data-title="ips.sim — Off-policy playground">
+    <section id="ips" className="card window reveal" data-title="ips.sim - Off-policy playground">
       <div className="head">
         <div>
           <p className="eyebrow">Live · synthetic world · not KuaiRec, not an Arm F result</p>
@@ -661,7 +661,7 @@ function Audit() {
   const W = 720, rowH = 64, H = sets.length * rowH + 10, l = 120, rr = 20;
   const markOf = (k) => (k === 'kuairec_small' ? [[af.small_ts_min, 'T_s'], [af.small_ts_median, 'median']] : [[audit[k].ts_q80, 'T1'], [audit[k].ts_q90, 'T2']]);
   return (
-    <section id="audit" className="card window reveal" data-title="data_audit.json — Data & splits">
+    <section id="audit" className="card window reveal" data-title="data_audit.json - Data & splits">
       <div className="head">
         <div>
           <p className="eyebrow">Recorded · audit A1 to A4</p>
@@ -733,7 +733,7 @@ function Limits() {
     ['No literature claim', 'A short related-work note now exists (docs/related_work.md) but it is not a systematic review, so PREREG section 9 still bars novelty claims.'],
   ];
   return (
-    <section id="limits" className="card window reveal" data-title="threats.md — Limits and overclaim guard">
+    <section id="limits" className="card window reveal" data-title="threats.md - Limits and overclaim guard">
       <p className="eyebrow">Threats to validity</p>
       <h2>What this page <em>cannot</em> tell you.</h2>
       <div className="grid2" style={{ marginTop: 16 }}>
@@ -748,7 +748,7 @@ function Limits() {
 function Decisions() {
   const ds = parseDecisions(decisionsMd);
   return (
-    <section id="decisions" className="card window reveal" data-title="decisions.md — Judgement calls">
+    <section id="decisions" className="card window reveal" data-title="decisions.md - Judgement calls">
       <p className="eyebrow">Decision log</p>
       <h2>{ds.length} judgement calls, <em>recorded</em> in the open.</h2>
       <p className="sub">Read from <a href={blob('DECISIONS.md')}>DECISIONS.md</a> at build time. Open any entry for the full text.</p>
